@@ -260,10 +260,6 @@ public class InvoiceService {
     String s = (search != null && search.isBlank()) ? null : search;
     String sg = (supplierGstin != null && supplierGstin.isBlank()) ? null : supplierGstin;
     String in = (invoiceNumber != null && invoiceNumber.isBlank()) ? null : invoiceNumber;
-    if (status == null && sg == null && in == null && s == null) {
-      return repository.findAllByOrderByCreatedAtDesc().stream()
-          .map(i -> toDto(i, null, false)).toList();
-    }
     return repository.search(TenantContext.getOrDefault(), status, sg, in, s).stream()
         .map(i -> toDto(i, null, false)).toList();
   }
@@ -287,7 +283,7 @@ public class InvoiceService {
 
   @Transactional
   public InvoiceDto approve(UUID id, String actor) {
-    Invoice invoice = repository.findByIdWithLines(id)
+    Invoice invoice = repository.findByIdWithLinesAndOrganizationId(id, TenantContext.getOrDefault())
       .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
     invoice.getStatus().transitionTo(InvoiceStatus.APPROVED);
 
@@ -408,43 +404,7 @@ public class InvoiceService {
     return eligible ? InvoiceStatus.AUTO_APPROVED : InvoiceStatus.REVIEW_REQUIRED;
   }
 
-  /*REMOVE_WORKFLOW_HELPER_START*/
-    try {
-      return InvoiceStatus.valueOf(nextState.trim().toUpperCase());
-    } catch (Exception e) {
-      throw new IllegalArgumentException("Unsupported workflow nextState: " + nextState);
-    }
-  }
-
-  private Map<String, Object> workflowFields(Invoice invoice) {
-    Map<String, Object> fields = new LinkedHashMap<>();
-    fields.put("invoiceNumber", invoice.getInvoiceNumber());
-    fields.put("supplierGstin", invoice.getSupplierGstin());
-    fields.put("customerGstin", invoice.getCustomerGstin());
-    fields.put("supplierGstinStatus", invoice.getSupplierGstinStatus() == null ? null : invoice.getSupplierGstinStatus().name());
-    fields.put("customerGstinStatus", invoice.getCustomerGstinStatus() == null ? null : invoice.getCustomerGstinStatus().name());
-    fields.put("supplierName", invoice.getSupplierName());
-    fields.put("totalAmount", invoice.getTotalAmount());
-    fields.put("subtotal", invoice.getSubtotal());
-    fields.put("taxAmount", invoice.getTaxAmount());
-    fields.put("extractionConfidence", invoice.getExtractionConfidence());
-    fields.put("arithmeticStatus", invoice.getArithmeticStatus() == null ? null : invoice.getArithmeticStatus().name());
-    fields.put("duplicateScore", invoice.getDuplicateScore() == null ? 0 : invoice.getDuplicateScore());
-    return fields;
-  }
-
-  private Map<String, Object> webhookPayload(Invoice invoice, String reason) {
-    Map<String, Object> payload = new LinkedHashMap<>();
-    payload.put("invoiceId", invoice.getId());
-    payload.put("organizationId", invoice.getOrganizationId());
-    payload.put("invoiceNumber", invoice.getInvoiceNumber());
-    payload.put("supplierName", invoice.getSupplierName());
-    payload.put("totalAmount", invoice.getTotalAmount());
-    if (reason != null) payload.put("reason", reason);
-    return payload;
-  }
-
-  private String buildAutoApproveBlockReasons(Invoice invoice)
+  private String buildAutoApproveBlockReasons(Invoice invoice) {
     List<String> reasons = new java.util.ArrayList<>();
     double conf = invoice.getExtractionConfidence() == null ? 0 : invoice.getExtractionConfidence().doubleValue();
     if (conf < 95.0) reasons.add("confidence=" + conf + "%<95%");
