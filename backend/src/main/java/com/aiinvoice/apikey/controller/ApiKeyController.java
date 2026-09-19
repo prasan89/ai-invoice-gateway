@@ -32,7 +32,7 @@ public class ApiKeyController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> revoke(@PathVariable UUID id) {
-        apiKeyService.revoke(id);
+        apiKeyService.revoke(TenantContext.getOrDefault(), id);
         return ResponseEntity.noContent().build();
     }
 }
