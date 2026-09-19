@@ -229,7 +229,8 @@ public class HyperspaceInvoiceExtractor implements InvoiceExtractor {
   }
 
   private BigDecimal decimal(JsonNode node, String name) {
-    return node.path(name).isNull() ? null : node.path(name).decimalValue();
+    if (node.path(name).isNull() || node.path(name).isMissingNode()) return null;
+    return node.path(name).decimalValue().setScale(2, java.math.RoundingMode.HALF_UP);
   }
 
   private LocalDate date(JsonNode node, String name) {
