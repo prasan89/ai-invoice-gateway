@@ -73,6 +73,7 @@ public class PurchaseOrderService {
 
     public PurchaseOrderDto getById(UUID id) {
         return poRepository.findByIdWithLines(id)
+            .filter(p -> TenantContext.getOrDefault().equals(p.getOrganizationId()))
             .map(this::toDto)
             .orElseThrow(() -> new NoSuchElementException("PO not found: " + id));
     }
