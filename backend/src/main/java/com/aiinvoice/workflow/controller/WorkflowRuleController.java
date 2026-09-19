@@ -29,7 +29,7 @@ public class WorkflowRuleController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        ruleService.delete(id);
+        ruleService.delete(TenantContext.getOrDefault(), id);
         return ResponseEntity.noContent().build();
     }
 }
