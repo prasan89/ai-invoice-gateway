@@ -8,3 +8,5 @@ uploads/
 .env
 .env.*
 !.env.example
+backend/data/
+frontend/tsconfig.tsbuildinfo
