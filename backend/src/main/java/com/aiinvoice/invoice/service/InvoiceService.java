@@ -2,7 +2,6 @@ package com.aiinvoice.invoice.service;
 
 import com.aiinvoice.ai.InvoiceExtractionResult;
 import com.aiinvoice.ai.InvoiceExtractor;
-import com.aiinvoice.auth.context.TenantContext;
 import com.aiinvoice.invoice.domain.ArithmeticStatus;
 import com.aiinvoice.invoice.domain.GstinValidationStatus;
 import com.aiinvoice.invoice.domain.InvoiceStatus;
@@ -20,14 +19,10 @@ import com.aiinvoice.invoice.repository.InvoiceEventRepository;
 import com.aiinvoice.invoice.repository.InvoiceRepository;
 import com.aiinvoice.auth.context.TenantContext;
 import com.aiinvoice.webhook.service.WebhookDispatcher;
-import com.aiinvoice.workflow.dto.WorkflowDecision;
-import com.aiinvoice.workflow.service.WorkflowEngine;
-import com.aiinvoice.webhook.service.WebhookDispatcher;
 import com.aiinvoice.workflow.service.WorkflowEngine;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -72,8 +67,7 @@ public class InvoiceService {
                         InvoiceRuleEngine ruleEngine,
                         WorkflowEngine workflowEngine,
                         WebhookDispatcher webhookDispatcher,
-                        ObjectMapper mapper,
-                        @Value("${invoice.demo-organization-id:bc1e6b1a-8837-3056-b676-6cae794de216}") String demoOrgId) {
+                        ObjectMapper mapper) {
     this.repository = repository;
     this.eventRepository = eventRepository;
     this.extractor = extractor;
@@ -88,7 +82,6 @@ public class InvoiceService {
     this.workflowEngine = workflowEngine;
     this.webhookDispatcher = webhookDispatcher;
     this.mapper = mapper;
-    this.demoOrganization = UUID.fromString(demoOrgId);
   }
 
   @Transactional
@@ -106,7 +99,7 @@ public class InvoiceService {
     UUID id = UUID.randomUUID();
     Invoice invoice = new Invoice();
     invoice.setId(id);
-    UUID orgId = TenantContext.getOrDefault() != null ? TenantContext.getOrDefault() : demoOrganization;
+    UUID orgId = TenantContext.getOrDefault();
     invoice.setOrganizationId(orgId);
     invoice.setStatus(InvoiceStatus.PROCESSING);
     invoice.setCreatedAt(Instant.now());
@@ -197,10 +190,6 @@ public class InvoiceService {
     String eventMsg = failed ? ("Validation failed: " + firstFailure) : "Deterministic invoice validation passed";
     record(invoice, eventType, eventMsg);
 
-    if (workflowDecision != null) {
-      record(invoice, "WORKFLOW_APPLIED",
-          "Rule '" + workflowDecision.ruleName() + "' routed invoice to " + workflowDecision.nextState());
-    }
     if (newStatus == InvoiceStatus.AUTO_APPROVED) {
       record(invoice, "AUTO_APPROVED", "Auto-approved: confidence=" + invoice.getExtractionConfidence()
           + "%, arithmetic=PASS, duplicate<80, GSTIN valid, amount<500000");
@@ -281,7 +270,7 @@ public class InvoiceService {
 
   @Transactional
   public InvoiceDto findById(UUID id) {
-    return toDto(repository.findByIdWithLines(id)
+    return toDto(repository.findByIdWithLinesAndOrganizationId(id, TenantContext.getOrDefault())
       .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id)), null, false);
   }
 
@@ -369,6 +358,7 @@ public class InvoiceService {
       try {
         byte[] body = mapper.writeValueAsBytes(dto);
         Invoice inv = repository.findById(id)
+            .filter(i -> TenantContext.getOrDefault().equals(i.getOrganizationId()))
             .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
         record(inv, "EXPORTED", "Invoice exported as JSON");
         return ResponseEntity.ok()
@@ -418,7 +408,7 @@ public class InvoiceService {
     return eligible ? InvoiceStatus.AUTO_APPROVED : InvoiceStatus.REVIEW_REQUIRED;
   }
 
-  private InvoiceStatus parseWorkflowState(String nextState) {
+  /*REMOVE_WORKFLOW_HELPER_START*/
     try {
       return InvoiceStatus.valueOf(nextState.trim().toUpperCase());
     } catch (Exception e) {
