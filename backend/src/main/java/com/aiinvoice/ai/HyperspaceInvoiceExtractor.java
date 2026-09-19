@@ -101,7 +101,7 @@ public class HyperspaceInvoiceExtractor implements InvoiceExtractor {
 
   public HyperspaceInvoiceExtractor(ObjectMapper mapper,
       @Value("${hyperspace.api-key:}") String apiKey,
-      @Value("${hyperspace.base-url:http://localhost:6655}") String baseUrl,
+      @Value("${hyperspace.base-url:http://localhost:6655/anthropic}") String baseUrl,
       @Value("${hyperspace.model:claude-sonnet-4-6}") String model) {
     this.mapper = mapper;
     this.apiKey = apiKey;
@@ -120,33 +120,41 @@ public class HyperspaceInvoiceExtractor implements InvoiceExtractor {
       String mime = document.getContentType() == null ? "application/pdf" : document.getContentType();
       String base64 = Base64.getEncoder().encodeToString(document.getBytes());
 
-      // Build image content part (chat completions vision format)
-      Map<String, Object> imageUrl = new LinkedHashMap<>();
-      imageUrl.put("url", "data:" + mime + ";base64," + base64);
-      imageUrl.put("detail", "high");
+      // Anthropic Messages API format
+      Map<String, Object> contentBlock = new LinkedHashMap<>();
+      if (mime.startsWith("image/")) {
+        Map<String, Object> source = new LinkedHashMap<>();
+        source.put("type", "base64");
+        source.put("media_type", mime);
+        source.put("data", base64);
+        contentBlock.put("type", "image");
+        contentBlock.put("source", source);
+      } else {
+        Map<String, Object> source = new LinkedHashMap<>();
+        source.put("type", "base64");
+        source.put("media_type", mime);
+        source.put("data", base64);
+        contentBlock.put("type", "document");
+        contentBlock.put("source", source);
+      }
 
-      Map<String, Object> imagePart = new LinkedHashMap<>();
-      imagePart.put("type", "image_url");
-      imagePart.put("image_url", imageUrl);
-
-      Map<String, Object> textPart = Map.of("type", "text", "text", USER_PROMPT);
-
-      Map<String, Object> userMessage = new LinkedHashMap<>();
-      userMessage.put("role", "user");
-      userMessage.put("content", List.of(imagePart, textPart));
-
-      Map<String, Object> systemMessage = Map.of("role", "system", "content", SYSTEM_PROMPT);
+      Map<String, Object> textBlock = Map.of("type", "text", "text", USER_PROMPT);
+      Map<String, Object> message = Map.of(
+          "role", "user",
+          "content", List.of(contentBlock, textBlock));
 
       Map<String, Object> request = new LinkedHashMap<>();
       request.put("model", model);
       request.put("max_tokens", 4096);
-      request.put("messages", List.of(systemMessage, userMessage));
-      request.put("response_format", Map.of("type", "json_object"));
+      request.put("system", SYSTEM_PROMPT);
+      request.put("messages", List.of(message));
 
       HttpRequest httpRequest = HttpRequest.newBuilder()
-          .uri(URI.create(baseUrl + "/v1/chat/completions"))
+          .uri(URI.create(baseUrl + "/v1/messages"))
           .timeout(Duration.ofSeconds(120))
-          .header("Authorization", "Bearer " + apiKey)
+          .header("x-api-key", apiKey)
+          .header("anthropic-version", "2023-06-01")
+          .header("anthropic-beta", "pdfs-2024-09-25")
           .header("Content-Type", "application/json")
           .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(request)))
           .build();
@@ -159,7 +167,7 @@ public class HyperspaceInvoiceExtractor implements InvoiceExtractor {
             "Hyperspace extraction failed: HTTP " + response.statusCode() + " " + response.body());
 
       JsonNode root = mapper.readTree(response.body());
-      String output = root.path("choices").get(0).path("message").path("content").asText("");
+      String output = root.path("content").get(0).path("text").asText("");
 
       output = output.strip();
       if (output.startsWith("```")) {

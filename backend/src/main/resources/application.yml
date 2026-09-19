@@ -25,7 +25,7 @@ claude:
   model: ${CLAUDE_MODEL:claude-sonnet-4-6}
 hyperspace:
   api-key: ${HYPERSPACE_API_KEY:}
-  base-url: ${HYPERSPACE_BASE_URL:http://localhost:6655}
+  base-url: ${HYPERSPACE_BASE_URL:http://localhost:6655/anthropic}
   model: ${HYPERSPACE_MODEL:claude-sonnet-4-6}
 invoice:
   storage-dir: ${INVOICE_STORAGE_DIR:./data/invoices}
