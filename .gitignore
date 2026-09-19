@@ -1,0 +1,10 @@
+.idea/
+.vscode/
+.DS_Store
+node_modules/
+.next/
+target/
+uploads/
+.env
+.env.*
+!.env.example
