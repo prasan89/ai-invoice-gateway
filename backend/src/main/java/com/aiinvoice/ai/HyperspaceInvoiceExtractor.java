@@ -33,6 +33,7 @@ public class HyperspaceInvoiceExtractor implements InvoiceExtractor {
       Never invent a value. If a field is absent or unclear, return null.
       Preserve exact numeric values as they appear on the invoice; do not recalculate.
       Dates must be ISO-8601 yyyy-MM-dd.
+      GSTINs must be returned as exactly 15 uppercase alphanumeric characters with no spaces, dashes, or punctuation.
       """;
 
   private static final String USER_PROMPT = """
