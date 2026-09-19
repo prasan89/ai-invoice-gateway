@@ -53,8 +53,8 @@ public class DemoInvoiceExtractor implements InvoiceExtractor {
 
     InvoiceDto invoice = new InvoiceDto(
         null, "DEMO-INV-1001", LocalDate.now(), "INR",
-        "Demo Supplier Pvt Ltd",  "29AAAAA0000A1Z5",
-        "Demo Customer Pvt Ltd",  "33BBBBB0000B1Z6",
+        "Demo Supplier Pvt Ltd",  "29AAAPL2345A1Z8",
+        "Demo Customer Pvt Ltd",  "33BBBPL3456B1Z7",
         subtotal, tax, cgst, sgst, null, null, total,
         new BigDecimal("96.50"), InvoiceStatus.EXTRACTED, null,
         List.of(line), confidence, null, null, null,
