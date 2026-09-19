@@ -11,6 +11,7 @@ import com.aiinvoice.invoice.repository.InvoiceRepository;
 import com.aiinvoice.invoice.service.InvoiceService;
 import com.aiinvoice.invoice.service.InvoiceStorageService;
 import com.aiinvoice.po.service.PoMatchingService;
+import com.aiinvoice.security.FileTypeValidator;
 import jakarta.validation.Valid;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -30,18 +31,24 @@ public class InvoiceController {
   private final InvoiceRepository repository;
   private final InvoiceStorageService storage;
   private final PoMatchingService poMatchingService;
+  private final FileTypeValidator fileTypeValidator;
 
   public InvoiceController(InvoiceService service, InvoiceRepository repository,
-                           InvoiceStorageService storage, PoMatchingService poMatchingService) {
+                           InvoiceStorageService storage, PoMatchingService poMatchingService,
+                           FileTypeValidator fileTypeValidator) {
     this.service = service;
     this.repository = repository;
     this.storage = storage;
     this.poMatchingService = poMatchingService;
+    this.fileTypeValidator = fileTypeValidator;
   }
 
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  public InvoiceDto upload(@RequestPart("file") MultipartFile file) {
-    return service.createFromUpload(file);
+  public ResponseEntity<InvoiceDto> upload(@RequestPart("file") MultipartFile file) {
+    if (!fileTypeValidator.isAllowed(file)) {
+      return ResponseEntity.status(415).build();
+    }
+    return ResponseEntity.ok(service.createFromUpload(file));
   }
 
   @GetMapping

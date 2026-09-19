@@ -2,6 +2,7 @@ package com.aiinvoice.invoice.service;
 
 import com.aiinvoice.ai.InvoiceExtractionResult;
 import com.aiinvoice.ai.InvoiceExtractor;
+import com.aiinvoice.auth.context.TenantContext;
 import com.aiinvoice.invoice.domain.ArithmeticStatus;
 import com.aiinvoice.invoice.domain.GstinValidationStatus;
 import com.aiinvoice.invoice.domain.InvoiceStatus;
@@ -17,6 +18,8 @@ import com.aiinvoice.invoice.entity.InvoiceEvent;
 import com.aiinvoice.invoice.entity.InvoiceLine;
 import com.aiinvoice.invoice.repository.InvoiceEventRepository;
 import com.aiinvoice.invoice.repository.InvoiceRepository;
+import com.aiinvoice.webhook.service.WebhookDispatcher;
+import com.aiinvoice.workflow.service.WorkflowEngine;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
@@ -50,6 +53,8 @@ public class InvoiceService {
   private final GstinPortalService gstinPortal;
   private final VendorService vendorService;
   private final InvoiceRuleEngine ruleEngine;
+  private final WorkflowEngine workflowEngine;
+  private final WebhookDispatcher webhookDispatcher;
   private final ObjectMapper mapper;
 
   public InvoiceService(InvoiceRepository repository,
@@ -63,6 +68,8 @@ public class InvoiceService {
                         GstinPortalService gstinPortal,
                         VendorService vendorService,
                         InvoiceRuleEngine ruleEngine,
+                        WorkflowEngine workflowEngine,
+                        WebhookDispatcher webhookDispatcher,
                         ObjectMapper mapper,
                         @Value("${invoice.demo-organization-id:bc1e6b1a-8837-3056-b676-6cae794de216}") String demoOrgId) {
     this.repository = repository;
@@ -76,6 +83,8 @@ public class InvoiceService {
     this.gstinPortal = gstinPortal;
     this.vendorService = vendorService;
     this.ruleEngine = ruleEngine;
+    this.workflowEngine = workflowEngine;
+    this.webhookDispatcher = webhookDispatcher;
     this.mapper = mapper;
     this.demoOrganization = UUID.fromString(demoOrgId);
   }
@@ -95,7 +104,8 @@ public class InvoiceService {
     UUID id = UUID.randomUUID();
     Invoice invoice = new Invoice();
     invoice.setId(id);
-    invoice.setOrganizationId(demoOrganization);
+    UUID orgId = TenantContext.getOrDefault() != null ? TenantContext.getOrDefault() : demoOrganization;
+    invoice.setOrganizationId(orgId);
     invoice.setStatus(InvoiceStatus.PROCESSING);
     invoice.setCreatedAt(Instant.now());
     invoice.setUpdatedAt(Instant.now());
@@ -176,7 +186,7 @@ public class InvoiceService {
     String firstFailure = allResults.stream()
         .filter(ValidationResult::isFailed).map(ValidationResult::message).findFirst().orElse(null);
     invoice.setValidationMessage(firstFailure);
-    InvoiceStatus newStatus = determineStatus(invoice, failed);
+    InvoiceStatus newStatus = determineStatus(invoice, failed, orgId);
     invoice.setStatus(newStatus);
     invoice.setUpdatedAt(Instant.now());
 
@@ -296,6 +306,10 @@ public class InvoiceService {
     invoice.setUpdatedAt(Instant.now());
     InvoiceDto saved = toDto(repository.save(invoice), validationResults, false);
     record(invoice, "APPROVED", "Invoice approved after validation", actor);
+    webhookDispatcher.dispatch(invoice.getOrganizationId(), "invoice.approved",
+        Map.of("invoiceId", id.toString(), "supplierName",
+            invoice.getSupplierName() != null ? invoice.getSupplierName() : "",
+            "totalAmount", invoice.getTotalAmount() != null ? invoice.getTotalAmount().toString() : "0"));
     return saved;
   }
 
@@ -308,6 +322,9 @@ public class InvoiceService {
     invoice.setUpdatedAt(Instant.now());
     InvoiceDto saved = toDto(repository.save(invoice), null, false);
     record(invoice, "REJECTED", reason != null && !reason.isBlank() ? reason : "Invoice rejected by reviewer", actor);
+    webhookDispatcher.dispatch(invoice.getOrganizationId(), "invoice.rejected",
+        Map.of("invoiceId", id.toString(), "reason",
+            reason != null ? reason : "rejected"));
     return saved;
   }
 
@@ -368,8 +385,20 @@ public class InvoiceService {
         .body(body);
   }
 
-  private InvoiceStatus determineStatus(Invoice invoice, boolean validationFailed) {
+  private InvoiceStatus determineStatus(Invoice invoice, boolean validationFailed, UUID organizationId) {
     if (validationFailed) return InvoiceStatus.FAILED;
+
+    // Check workflow rules first — if any match, route to the defined next state
+    Map<String, Object> fields = new java.util.HashMap<>();
+    if (invoice.getTotalAmount() != null) fields.put("totalAmount", invoice.getTotalAmount());
+    if (invoice.getSupplierGstin() != null) fields.put("supplierGstin", invoice.getSupplierGstin());
+    if (invoice.getExtractionConfidence() != null) fields.put("extractionConfidence", invoice.getExtractionConfidence());
+    var decision = workflowEngine.evaluate(organizationId, fields);
+    if (decision.isPresent()) {
+      try { return InvoiceStatus.valueOf(decision.get().nextState()); }
+      catch (IllegalArgumentException ignored) {}
+    }
+
     double confidence = invoice.getExtractionConfidence() == null
         ? 0 : invoice.getExtractionConfidence().doubleValue();
     boolean eligible = confidence >= 95.0
