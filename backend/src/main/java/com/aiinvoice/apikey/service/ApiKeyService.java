@@ -50,7 +50,7 @@ public class ApiKeyService {
     }
 
     @Transactional
-    public void revoke(UUID id) {
+    public void revoke(UUID organizationId, UUID id) {
         keyRepo.findById(id).ifPresent(k -> {
             k.setRevokedAt(Instant.now());
             keyRepo.save(k);
