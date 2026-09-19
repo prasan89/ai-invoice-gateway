@@ -61,6 +61,13 @@ gstin:
   #   33ASTRA1234A1ZP — Astra Office Systems (auto_approve_clean_unique)
   #   29ORION5678B1ZQ — Orion Business Solutions (auto_approve_clean_unique)
   test-allowlist: ${GSTIN_TEST_ALLOWLIST:33AABCA1234A1ZQ,33AABCB4567C1ZK,33AABCC7890D1ZJ,33AABCS4321E1ZN,33AABCD1111F1ZX,33ASTRA1234A1ZP,29ORION5678B1ZQ,33AAZCA1234A1Z1,33AAZCX5678B1ZF}
+bulk:
+  staging-dir: ${BULK_STAGING_DIR:/tmp/bulk-staging}
+  worker-threads: ${BULK_WORKER_THREADS:5}
+  queue-capacity: ${BULK_QUEUE_CAPACITY:50}
+  poll-interval-ms: ${BULK_POLL_INTERVAL_MS:5000}
+erp:
+  system: ${ERP_SYSTEM:mock}
 management:
   endpoints:
     web:

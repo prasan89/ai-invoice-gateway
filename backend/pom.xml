@@ -26,6 +26,10 @@
     <!-- Phase 7: IMAP email polling -->
     <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-mail</artifactId></dependency>
     <dependency><groupId>com.sun.mail</groupId><artifactId>jakarta.mail</artifactId><version>2.0.1</version></dependency>
+    <!-- Phase 9: AOP for RBAC -->
+    <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-aop</artifactId></dependency>
+    <!-- Phase 13: BCrypt -->
+    <dependency><groupId>org.springframework.security</groupId><artifactId>spring-security-crypto</artifactId></dependency>
   </dependencies>
   <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId></plugin></plugins></build>
 </project>
