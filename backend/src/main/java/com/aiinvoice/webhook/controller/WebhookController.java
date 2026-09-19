@@ -30,7 +30,7 @@ public class WebhookController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        webhookService.delete(id);
+        webhookService.delete(TenantContext.getOrDefault(), id);
         return ResponseEntity.noContent().build();
     }
 }
