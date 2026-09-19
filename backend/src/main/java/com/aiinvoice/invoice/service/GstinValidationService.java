@@ -1,10 +1,22 @@
 package com.aiinvoice.invoice.service;
 
 import com.aiinvoice.invoice.domain.GstinValidationStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
+/**
+ * Validates GSTINs using format check + Luhn-style checksum.
+ *
+ * TEST mode: set gstin.validation.mode=test and list synthetic GSTINs in
+ * gstin.test-allowlist (comma-separated). Those GSTINs bypass the checksum
+ * and return VALID, letting the auto-approval flow be tested end-to-end
+ * without weakening production validation for all other GSTINs.
+ */
 @Service
 public class GstinValidationService {
 
@@ -13,9 +25,26 @@ public class GstinValidationService {
 
     private static final String CHECKSUM_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+    private final boolean testMode;
+    private final Set<String> testAllowlist;
+
+    public GstinValidationService(
+            @Value("${gstin.validation.mode:production}") String mode,
+            @Value("${gstin.test-allowlist:}") String allowlist) {
+        this.testMode = "test".equalsIgnoreCase(mode);
+        this.testAllowlist = Arrays.stream(allowlist.split(","))
+            .map(String::trim)
+            .map(String::toUpperCase)
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toSet());
+    }
+
     public GstinValidationStatus validate(String gstin) {
         if (gstin == null || gstin.isBlank()) return GstinValidationStatus.NOT_PROVIDED;
         String g = gstin.trim().toUpperCase();
+
+        if (testMode && testAllowlist.contains(g)) return GstinValidationStatus.VALID;
+
         if (!GSTIN_PATTERN.matcher(g).matches()) return GstinValidationStatus.INVALID;
         return validateChecksum(g) ? GstinValidationStatus.VALID : GstinValidationStatus.INVALID;
     }

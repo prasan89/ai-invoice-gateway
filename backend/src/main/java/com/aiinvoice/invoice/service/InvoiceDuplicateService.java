@@ -11,6 +11,23 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Score bands:
+ *   >= 90  CONFIRMED  — exact hash, or same invoice# + same supplier GSTIN
+ *   60–89  POTENTIAL  — strong business similarity, not conclusive
+ *   < 60   NONE       — no meaningful match
+ *
+ * Signal weights:
+ *   Exact document hash                        → 100 (short-circuit)
+ *   invoice# + supplierGstin                   →  90 (same invoice identity)
+ *   invoice# alone                             →  50
+ *   supplierGstin + amount (≤0.01) + date      →  35
+ *   supplierGstin + amount (≤0.01)             →  25
+ *   Any single signal alone (gstin/amount/date)→   0 (too weak — a supplier
+ *                                                      can legitimately issue
+ *                                                      many invoices for the same
+ *                                                      amount to the same customer)
+ */
 @Service
 public class InvoiceDuplicateService {
 
@@ -32,7 +49,7 @@ public class InvoiceDuplicateService {
     }
 
     public DuplicateCheckResult check(Invoice invoice) {
-        // Exact hash match → score 100
+        // Exact document hash → confirmed duplicate
         if (invoice.getDocumentHash() != null) {
             var exact = repository.findFirstByDocumentHashAndIdNot(
                 invoice.getDocumentHash(), invoice.getId());
@@ -41,7 +58,6 @@ public class InvoiceDuplicateService {
             }
         }
 
-        // Business duplicate scoring
         if (invoice.getOrganizationId() == null) {
             return new DuplicateCheckResult(0, null);
         }
@@ -56,24 +72,7 @@ public class InvoiceDuplicateService {
         UUID bestId = null;
 
         for (Invoice candidate : candidates) {
-            int score = 0;
-            if (invoice.getInvoiceNumber() != null
-                && invoice.getInvoiceNumber().equals(candidate.getInvoiceNumber())) {
-                score += 25;
-            }
-            if (invoice.getSupplierGstin() != null
-                && invoice.getSupplierGstin().equals(candidate.getSupplierGstin())) {
-                score += 20;
-            }
-            if (invoice.getTotalAmount() != null && candidate.getTotalAmount() != null
-                && invoice.getTotalAmount().subtract(candidate.getTotalAmount()).abs()
-                    .compareTo(new BigDecimal("0.01")) <= 0) {
-                score += 10;
-            }
-            if (invoice.getInvoiceDate() != null
-                && invoice.getInvoiceDate().equals(candidate.getInvoiceDate())) {
-                score += 5;
-            }
+            int score = businessScore(invoice, candidate);
             if (score > bestScore) {
                 bestScore = score;
                 bestId = candidate.getId();
@@ -81,5 +80,30 @@ public class InvoiceDuplicateService {
         }
 
         return new DuplicateCheckResult(bestScore, bestId);
+    }
+
+    private int businessScore(Invoice a, Invoice b) {
+        boolean sameInvNum = a.getInvoiceNumber() != null
+            && a.getInvoiceNumber().equals(b.getInvoiceNumber());
+        boolean sameSupplierGstin = a.getSupplierGstin() != null
+            && a.getSupplierGstin().equals(b.getSupplierGstin());
+        boolean sameAmount = a.getTotalAmount() != null && b.getTotalAmount() != null
+            && a.getTotalAmount().subtract(b.getTotalAmount()).abs()
+                .compareTo(new BigDecimal("0.01")) <= 0;
+        boolean sameDate = a.getInvoiceDate() != null
+            && a.getInvoiceDate().equals(b.getInvoiceDate());
+
+        // Same invoice identity — very strong
+        if (sameInvNum && sameSupplierGstin) return 90;
+
+        // Invoice number alone is a strong signal
+        if (sameInvNum) return 50;
+
+        // Business signals are only meaningful in combination
+        if (sameSupplierGstin && sameAmount && sameDate) return 35;
+        if (sameSupplierGstin && sameAmount) return 25;
+
+        // No single weak signal (GSTIN/amount/date alone) ever triggers a flag
+        return 0;
     }
 }

@@ -29,6 +29,21 @@ hyperspace:
   model: ${HYPERSPACE_MODEL:claude-sonnet-4-6}
 invoice:
   storage-dir: ${INVOICE_STORAGE_DIR:./data/invoices}
+gstin:
+  # Set to "test" to enable the allowlist below for end-to-end auto-approval testing.
+  # In production, leave as "production" — only real checksum-valid GSTINs pass.
+  validation:
+    mode: ${GSTIN_VALIDATION_MODE:production}
+  # Comma-separated synthetic GSTINs that bypass checksum in test mode only.
+  # GSTINs from sample invoices used in local testing:
+  #   33AABCA1234A1ZQ — ABC Technologies (01_intrastate, 02_interstate)
+  #   33AABCB4567C1ZK — Bengaluru Retail Systems (02_interstate customer)
+  #   33AABCC7890D1ZJ — Chennai Industrial Supplies (03_discount_cess)
+  #   33AABCS4321E1ZN — Southline Manufacturing (03_discount_cess customer)
+  #   33AABCD1111F1ZX — Delta Office Services (04_low_confidence)
+  #   33ASTRA1234A1ZP — Astra Office Systems (auto_approve_clean_unique)
+  #   29ORION5678B1ZQ — Orion Business Solutions (auto_approve_clean_unique)
+  test-allowlist: ${GSTIN_TEST_ALLOWLIST:33AABCA1234A1ZQ,33AABCB4567C1ZK,33AABCC7890D1ZJ,33AABCS4321E1ZN,33AABCD1111F1ZX,33ASTRA1234A1ZP,29ORION5678B1ZQ,33AAZCA1234A1Z1,33AAZCX5678B1ZF}
 management:
   endpoints:
     web:

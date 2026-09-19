@@ -164,8 +164,22 @@ export default function Home(){
     });
   }
 
-  const isTerminal=selected?TERMINAL.has(selected.status):false;
-  const hasDuplicate=(selected?.duplicateScore??0)>=80;
+    const isTerminal=selected?TERMINAL.has(selected.status):false;
+  const dupScore=selected?.duplicateScore??0;
+  const dupLabel=dupScore>=90?"CONFIRMED":dupScore>=60?"POTENTIAL":null;
+  const hasDuplicate=dupScore>=60;
+
+  // Compute which gates are blocking auto-approval (for REVIEW_REQUIRED invoices)
+  const autoApprovalBlocks:string[]=[];
+  if(selected&&selected.status==="REVIEW_REQUIRED"){
+    if((selected.extractionConfidence??0)<95)autoApprovalBlocks.push(`Confidence ${Number(selected.extractionConfidence??0).toFixed(0)}% < 95%`);
+    if(selected.arithmeticStatus&&selected.arithmeticStatus!=="PASS")autoApprovalBlocks.push("Arithmetic check failed");
+    if(selected.supplierGstinStatus&&selected.supplierGstinStatus!=="VALID")autoApprovalBlocks.push(`Supplier GSTIN ${selected.supplierGstinStatus}`);
+    if(selected.customerGstinStatus&&selected.customerGstinStatus==="INVALID")autoApprovalBlocks.push(`Customer GSTIN ${selected.customerGstinStatus}`);
+    if(dupScore>=80)autoApprovalBlocks.push(`Duplicate score ${dupScore}/100`);
+    if((selected.totalAmount??0)>=500000)autoApprovalBlocks.push("Invoice total ≥ ₹5,00,000 (manual review required)");
+  }
+
   const passCount=selected?.validationResults?.filter(r=>r.status==="PASS").length??0;
   const failCount=selected?.validationResults?.filter(r=>r.status==="FAIL").length??0;
 
@@ -216,7 +230,7 @@ export default function Home(){
         <thead><tr><th>Invoice</th><th>Supplier</th><th>Date</th><th>Total</th><th>Confidence</th><th>Arith</th><th>GSTIN</th><th>Status</th></tr></thead>
         <tbody>
           {invoices.map(i=><tr key={i.id} className="clickable" onClick={()=>openInvoice(i.id)}>
-            <td>{i.invoiceNumber||"Unidentified"}{(i.duplicateScore??0)>=80&&<span className="dup-dot" title="Potential duplicate">⚠</span>}</td>
+            <td>{i.invoiceNumber||"Unidentified"}{(i.duplicateScore??0)>=90&&<span className="dup-dot dup-confirmed" title="Confirmed duplicate (score ≥ 90)">🚫</span>}{(i.duplicateScore??0)>=60&&(i.duplicateScore??0)<90&&<span className="dup-dot" title={`Potential duplicate (score ${i.duplicateScore}/100)`}>⚠</span>}</td>
             <td>{i.supplierName??"-"}</td>
             <td>{i.invoiceDate??"-"}</td>
             <td>{money(i.totalAmount)}</td>
@@ -243,7 +257,16 @@ export default function Home(){
         </div>
       </div>
 
-      {hasDuplicate&&<div className="duplicate-warning">⚠ Potential duplicate invoice detected (score: {selected.duplicateScore}/100){selected.duplicateInvoiceId&&<> — matches <code>{selected.duplicateInvoiceId.slice(0,8)}…</code></>}</div>}
+      {hasDuplicate&&<div className={`duplicate-warning dup-${dupLabel?.toLowerCase()}`}>
+        {dupLabel==="CONFIRMED"?"🚫 Confirmed duplicate":"⚠ Potential duplicate"} — score {selected.duplicateScore}/100
+        {dupLabel==="CONFIRMED"?" (same document or same invoice identity — blocked)":" (strong similarity — requires review)"}
+        {selected.duplicateInvoiceId&&<> · matches <code>{selected.duplicateInvoiceId.slice(0,8)}…</code></>}
+      </div>}
+
+      {autoApprovalBlocks.length>0&&<div className="review-blocked">
+        <span className="review-blocked-title">Auto-approval blocked by:</span>
+        {autoApprovalBlocks.map((b,i)=><span key={i} className="review-blocked-item">{b}</span>)}
+      </div>}
 
       <div className="review-grid">
         <div className="document-panel">
