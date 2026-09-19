@@ -204,8 +204,11 @@ public class HyperspaceInvoiceExtractor implements InvoiceExtractor {
     }
 
     Map<String, BigDecimal> conf = new LinkedHashMap<>();
-    n.path("fieldConfidence").fields().forEachRemaining(e ->
-        conf.put(e.getKey(), BigDecimal.valueOf(e.getValue().asDouble()).setScale(2, java.math.RoundingMode.HALF_UP)));
+    n.path("fieldConfidence").fields().forEachRemaining(e -> {
+      double v = e.getValue().asDouble();
+      if (v > 0 && v <= 1.0) v = v * 100; // normalize 0-1 scale to 0-100
+      conf.put(e.getKey(), BigDecimal.valueOf(v).setScale(2, java.math.RoundingMode.HALF_UP));
+    });
 
     double overall = conf.values().stream()
         .mapToDouble(BigDecimal::doubleValue).average().orElse(75.0);
