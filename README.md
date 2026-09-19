@@ -2,66 +2,81 @@
 
 AI-powered Indian invoice automation.
 
-## Phase 2
+## Current implementation
 
+### Phase 2 — AI extraction + human review
 - PDF/PNG/JPG upload with local document storage
-- OpenAI Responses API invoice extraction
-- Structured invoice fields and line items
+- OpenAI, Claude and Hyperspace AI extraction providers
+- Structured Indian GST invoice fields and line-level tax breakdown
 - Field-level AI confidence
-- Deterministic invoice arithmetic validation
+- Deterministic invoice arithmetic/GST validation
 - Side-by-side original document and extracted data review
 - Edit/save review
 - Approve workflow
-- Demo extractor remains available for local development without an API key
+- Demo extractor for local development without an API key
+
+### Phase 3 — Operations
+- Immutable-style invoice event history for upload, extraction, validation, review and approval
+- CSV export with header and line-level GST data
+- Review UI exposes CGST/SGST/IGST/Cess and line-level HSN/SAC/tax fields
+- Search and status filtering in the invoice dashboard
+- Audit history visible during invoice review
 
 ## Run locally
 
 ### 1. Database
-
-\`\`\`bash
+```bash
 docker compose up -d
-\`\`\`
+```
 
 ### 2. Backend
-
 Java 21 and Maven are required.
 
 For demo extraction:
-
-\`\`\`bash
+```bash
 cd backend
 mvn spring-boot:run
-\`\`\`
+```
 
-For real AI extraction, configure an OpenAI API key:
+For Hyperspace:
+```bash
+export AI_PROVIDER=hyperspace
+export HYPERSPACE_API_KEY="your_key"
+export HYPERSPACE_BASE_URL="http://localhost:6655/anthropic"
+export HYPERSPACE_MODEL="claude-sonnet-4-6"
+mvn spring-boot:run
+```
 
-\`\`\`bash
+For Claude:
+```bash
+export AI_PROVIDER=claude
+export CLAUDE_API_KEY="your_key"
+export CLAUDE_MODEL="claude-sonnet-4-6"
+mvn spring-boot:run
+```
+
+For OpenAI:
+```bash
 export AI_PROVIDER=openai
-export OPENAI_API_KEY="your_api_key"
+export OPENAI_API_KEY="your_key"
 export OPENAI_MODEL="gpt-5.6-luna"
 mvn spring-boot:run
-\`\`\`
+```
 
 The backend runs on http://localhost:8080.
 
 ### 3. Frontend
-
-\`\`\`bash
+```bash
 cd frontend
 npm install
 npm run dev
-\`\`\`
+```
 
 Open http://localhost:3000.
 
-## Phase 2 flow
+## Current flow
+Upload invoice -> store original -> AI extraction -> field confidence -> deterministic GST validation -> human review/edit -> approve -> audit trail/export.
 
-Upload invoice -> store original -> AI extraction -> field confidence -> arithmetic validation -> review/edit -> approve.
-
-The original document is stored under \`INVOICE_STORAGE_DIR\` (default \`./data/invoices\`). For production this should be replaced with object storage such as S3-compatible storage.
-
-## AI provider
-
-The current implementation uses OpenAI's Responses API for PDF/image input and structured JSON output. The application sends \`store=false\` for extraction requests.
+The original document is stored under `INVOICE_STORAGE_DIR` (default `./data/invoices`). For production, replace this with object storage such as S3-compatible storage.
 
 Do not commit API keys. Use environment variables or a secrets manager.

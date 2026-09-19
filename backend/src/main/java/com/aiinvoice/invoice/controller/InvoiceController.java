@@ -1,6 +1,7 @@
 package com.aiinvoice.invoice.controller;
 
 import com.aiinvoice.invoice.dto.InvoiceDto;
+import com.aiinvoice.invoice.dto.InvoiceEventDto;
 import com.aiinvoice.invoice.dto.InvoiceReviewRequest;
 import com.aiinvoice.invoice.entity.Invoice;
 import com.aiinvoice.invoice.repository.InvoiceRepository;
@@ -14,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,6 +42,21 @@ public class InvoiceController {
   @GetMapping public List<InvoiceDto> list() { return service.findAll(); }
 
   @GetMapping("/{id}") public InvoiceDto get(@PathVariable UUID id) { return service.findById(id); }
+
+  @GetMapping("/{id}/history")
+  public List<InvoiceEventDto> history(@PathVariable UUID id) {
+    return service.history(id);
+  }
+
+  @GetMapping("/{id}/export")
+  public ResponseEntity<byte[]> export(@PathVariable UUID id) {
+    byte[] body = service.exportCsv(id).getBytes(StandardCharsets.UTF_8);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "attachment; filename=\"invoice-" + id + ".csv\"")
+        .contentType(MediaType.parseMediaType("text/csv"))
+        .body(body);
+  }
 
   @PutMapping("/{id}/review")
   public InvoiceDto review(@PathVariable UUID id, @Valid @RequestBody InvoiceReviewRequest request) {
