@@ -193,7 +193,10 @@ public class InvoiceService {
     if (newStatus == InvoiceStatus.AUTO_APPROVED) {
       record(invoice, "AUTO_APPROVED", "Auto-approved: confidence=" + invoice.getExtractionConfidence()
           + "%, arithmetic=PASS, duplicate<80, GSTIN valid, amount<500000");
-      webhookDispatcher.dispatch(invoice.getOrganizationId(), "invoice.approved", webhookPayload(invoice, null));
+      webhookDispatcher.dispatch(invoice.getOrganizationId(), "invoice.approved",
+          Map.of("invoiceId", invoice.getId().toString(),
+              "supplierName", invoice.getSupplierName() != null ? invoice.getSupplierName() : "",
+              "totalAmount", invoice.getTotalAmount() != null ? invoice.getTotalAmount().toString() : "0"));
     } else if (newStatus == InvoiceStatus.REVIEW_REQUIRED) {
       String reasons = buildAutoApproveBlockReasons(invoice);
       record(invoice, "REVIEW_REQUIRED", "Sent to review queue. Blocking: " + reasons);
@@ -322,7 +325,7 @@ public class InvoiceService {
 
   @Transactional
   public InvoiceDto reprocess(UUID id) {
-    Invoice invoice = repository.findByIdWithLines(id)
+    Invoice invoice = repository.findByIdWithLinesAndOrganizationId(id, TenantContext.getOrDefault())
         .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
     if (invoice.getStatus() != InvoiceStatus.FAILED) {
       throw new IllegalStateException("Only FAILED invoices can be reprocessed");
@@ -367,7 +370,7 @@ public class InvoiceService {
       }
     }
     // CSV (default)
-    Invoice invoice = repository.findByIdWithLines(id)
+    Invoice invoice = repository.findByIdWithLinesAndOrganizationId(id, TenantContext.getOrDefault())
         .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
     byte[] body = buildCsv(invoice).getBytes(StandardCharsets.UTF_8);
     record(invoice, "EXPORTED", "Invoice exported as CSV");
