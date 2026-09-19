@@ -215,7 +215,7 @@ public class OpenAIInvoiceExtractor implements InvoiceExtractor {
 
     Map<String, BigDecimal> conf = new LinkedHashMap<>();
     n.path("fieldConfidence").fields().forEachRemaining(e ->
-        conf.put(e.getKey(), BigDecimal.valueOf(e.getValue().asDouble()).setScale(2)));
+        conf.put(e.getKey(), BigDecimal.valueOf(e.getValue().asDouble()).setScale(2, java.math.RoundingMode.HALF_UP)));
 
     double overall = conf.values().stream()
         .mapToDouble(BigDecimal::doubleValue).average().orElse(0);
@@ -228,7 +228,7 @@ public class OpenAIInvoiceExtractor implements InvoiceExtractor {
         decimal(n, "cgstAmount"), decimal(n, "sgstAmount"),
         decimal(n, "igstAmount"), decimal(n, "cessAmount"),
         decimal(n, "totalAmount"),
-        BigDecimal.valueOf(overall).setScale(2),
+        BigDecimal.valueOf(overall).setScale(2, java.math.RoundingMode.HALF_UP),
         InvoiceStatus.EXTRACTED, null, lines, conf, null, null, null);
 
     return new InvoiceExtractionResult(invoice, overall);

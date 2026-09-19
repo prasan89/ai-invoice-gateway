@@ -243,7 +243,7 @@ public class ClaudeInvoiceExtractor implements InvoiceExtractor {
         decimal(n, "cgstAmount"), decimal(n, "sgstAmount"),
         decimal(n, "igstAmount"), decimal(n, "cessAmount"),
         decimal(n, "totalAmount"),
-        BigDecimal.valueOf(overall).setScale(2),
+        BigDecimal.valueOf(overall).setScale(2, java.math.RoundingMode.HALF_UP),
         InvoiceStatus.EXTRACTED, null, lines, conf, null, null, null);
 
     return new InvoiceExtractionResult(invoice, overall);
