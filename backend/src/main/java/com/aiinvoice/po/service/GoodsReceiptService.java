@@ -6,6 +6,7 @@ import com.aiinvoice.po.dto.GrnLineDto;
 import com.aiinvoice.po.entity.GoodsReceipt;
 import com.aiinvoice.po.entity.GrnLine;
 import com.aiinvoice.po.repository.GoodsReceiptRepository;
+import com.aiinvoice.auth.context.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,15 +20,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class GoodsReceiptService {
 
-    private static final UUID DEMO_ORG = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
     private final GoodsReceiptRepository grnRepository;
 
     @Transactional
     public GoodsReceiptDto create(CreateGrnRequest req) {
         GoodsReceipt grn = new GoodsReceipt();
         grn.setId(UUID.randomUUID());
-        grn.setOrganizationId(DEMO_ORG);
+        grn.setOrganizationId(TenantContext.getOrDefault());
         grn.setPoId(req.poId());
         grn.setGrnNumber(req.grnNumber());
         grn.setReceiptDate(req.receiptDate());
@@ -55,7 +54,7 @@ public class GoodsReceiptService {
 
     public List<GoodsReceiptDto> listByOrg() {
         return grnRepository.findAll().stream()
-            .filter(g -> DEMO_ORG.equals(g.getOrganizationId()))
+            .filter(g -> TenantContext.getOrDefault().equals(g.getOrganizationId()))
             .map(this::toDto)
             .toList();
     }
