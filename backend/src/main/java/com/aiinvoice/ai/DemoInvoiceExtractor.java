@@ -57,7 +57,8 @@ public class DemoInvoiceExtractor implements InvoiceExtractor {
         "Demo Customer Pvt Ltd",  "33BBBBB0000B1Z6",
         subtotal, tax, cgst, sgst, null, null, total,
         new BigDecimal("96.50"), InvoiceStatus.EXTRACTED, null,
-        List.of(line), confidence, null, null, null);
+        List.of(line), confidence, null, null, null,
+        null, null, null, null, null, null, null, null);
 
     return new InvoiceExtractionResult(invoice, 96.5);
   }

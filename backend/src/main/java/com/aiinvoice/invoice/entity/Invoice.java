@@ -1,5 +1,7 @@
 package com.aiinvoice.invoice.entity;
 
+import com.aiinvoice.invoice.domain.ArithmeticStatus;
+import com.aiinvoice.invoice.domain.GstinValidationStatus;
 import com.aiinvoice.invoice.domain.InvoiceStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -47,6 +49,24 @@ public class Invoice {
   @JdbcTypeCode(SqlTypes.JSON)
   @Column(name="field_confidence", columnDefinition="jsonb")
   private String fieldConfidence;
+
+  @Column(name="document_hash") private String documentHash;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name="arithmetic_status") private ArithmeticStatus arithmeticStatus;
+
+  @Column(name="duplicate_score") private Integer duplicateScore;
+
+  @Column(name="duplicate_invoice_id") private UUID duplicateInvoiceId;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name="supplier_gstin_status") private GstinValidationStatus supplierGstinStatus;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name="customer_gstin_status") private GstinValidationStatus customerGstinStatus;
+
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name="vendor_id") private Vendor vendor;
 
   @OneToMany(mappedBy="invoice", cascade=CascadeType.ALL, orphanRemoval=true)
   private List<InvoiceLine> lines = new ArrayList<>();

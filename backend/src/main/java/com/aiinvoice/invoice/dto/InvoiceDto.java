@@ -1,6 +1,9 @@
 package com.aiinvoice.invoice.dto;
 
+import com.aiinvoice.invoice.domain.ArithmeticStatus;
+import com.aiinvoice.invoice.domain.GstinValidationStatus;
 import com.aiinvoice.invoice.domain.InvoiceStatus;
+import com.aiinvoice.invoice.domain.ValidationResult;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
@@ -33,5 +36,13 @@ public record InvoiceDto(
   Map<String, BigDecimal> fieldConfidence,
   String sourceFileName,
   String sourceContentType,
-  String documentUrl
+  String documentUrl,
+  List<ValidationResult> validationResults,
+  GstinValidationStatus supplierGstinStatus,
+  GstinValidationStatus customerGstinStatus,
+  ArithmeticStatus arithmeticStatus,
+  Integer duplicateScore,
+  UUID duplicateInvoiceId,
+  UUID vendorId,
+  String vendorNormalizedName
 ) {}
