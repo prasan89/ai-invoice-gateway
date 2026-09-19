@@ -3,6 +3,7 @@ package com.aiinvoice.apikey.controller;
 import com.aiinvoice.apikey.dto.ApiKeyDto;
 import com.aiinvoice.apikey.dto.CreateApiKeyRequest;
 import com.aiinvoice.apikey.service.ApiKeyService;
+import com.aiinvoice.auth.context.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,16 +19,14 @@ import java.util.UUID;
 public class ApiKeyController {
 
     private final ApiKeyService apiKeyService;
-    private static final UUID DEMO_ORG = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
     @GetMapping
     public List<ApiKeyDto> list() {
-        return apiKeyService.listByOrg(DEMO_ORG);
+        return apiKeyService.listByOrg(TenantContext.getOrDefault());
     }
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> create(@RequestBody CreateApiKeyRequest req) {
-        ApiKeyService.CreatedKey result = apiKeyService.create(DEMO_ORG, req);
+        ApiKeyService.CreatedKey result = apiKeyService.create(TenantContext.getOrDefault(), req);
         return ResponseEntity.ok(Map.of("key", result.rawKey(), "meta", result.dto()));
     }
 
