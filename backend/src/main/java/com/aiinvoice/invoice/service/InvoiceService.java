@@ -76,12 +76,12 @@ public class InvoiceService {
   }
 
   public InvoiceDto findById(UUID id) {
-    return toDto(repository.findById(id)
+    return toDto(repository.findByIdWithLines(id)
       .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id)));
   }
 
   public InvoiceDto approve(UUID id) {
-    Invoice invoice = repository.findById(id)
+    Invoice invoice = repository.findByIdWithLines(id)
       .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
     String validation = validator.validate(invoice);
     if (validation != null) throw new IllegalArgumentException(validation);
