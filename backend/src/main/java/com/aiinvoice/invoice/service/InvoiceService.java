@@ -307,7 +307,7 @@ public class InvoiceService {
 
   @Transactional
   public InvoiceDto reject(UUID id, String reason, String actor) {
-    Invoice invoice = repository.findByIdWithLines(id)
+    Invoice invoice = repository.findByIdWithLinesAndOrganizationId(id, TenantContext.getOrDefault())
         .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
     invoice.getStatus().transitionTo(InvoiceStatus.REJECTED);
     invoice.setStatus(InvoiceStatus.REJECTED);
