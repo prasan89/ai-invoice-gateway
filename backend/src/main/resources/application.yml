@@ -29,6 +29,10 @@ hyperspace:
   model: ${HYPERSPACE_MODEL:claude-sonnet-4-6}
 invoice:
   storage-dir: ${INVOICE_STORAGE_DIR:./data/invoices}
+  demo-organization-id: ${INVOICE_DEMO_ORG_ID:bc1e6b1a-8837-3056-b676-6cae794de216}
+  arithmetic:
+    tolerance: ${INVOICE_ARITH_TOLERANCE:0.05}
+    warn-threshold: ${INVOICE_ARITH_WARN_THRESHOLD:0.50}
 gstin:
   # Set to "test" to enable the allowlist below for end-to-end auto-approval testing.
   # In production, leave as "production" — only real checksum-valid GSTINs pass.

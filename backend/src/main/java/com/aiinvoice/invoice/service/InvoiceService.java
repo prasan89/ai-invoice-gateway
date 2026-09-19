@@ -6,6 +6,7 @@ import com.aiinvoice.invoice.domain.ArithmeticStatus;
 import com.aiinvoice.invoice.domain.GstinValidationStatus;
 import com.aiinvoice.invoice.domain.InvoiceStatus;
 import com.aiinvoice.invoice.domain.ValidationResult;
+import com.aiinvoice.invoice.domain.ValidationResult.RuleStatus;
 import com.aiinvoice.invoice.dto.DashboardStatsDto;
 import com.aiinvoice.invoice.dto.InvoiceDto;
 import com.aiinvoice.invoice.dto.InvoiceEventDto;
@@ -14,12 +15,12 @@ import com.aiinvoice.invoice.dto.InvoiceReviewRequest;
 import com.aiinvoice.invoice.entity.Invoice;
 import com.aiinvoice.invoice.entity.InvoiceEvent;
 import com.aiinvoice.invoice.entity.InvoiceLine;
-import com.aiinvoice.invoice.entity.Vendor;
 import com.aiinvoice.invoice.repository.InvoiceEventRepository;
 import com.aiinvoice.invoice.repository.InvoiceRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -36,8 +37,7 @@ import java.util.UUID;
 
 @Service
 public class InvoiceService {
-  private static final UUID DEMO_ORGANIZATION =
-      UUID.nameUUIDFromBytes("demo-organization".getBytes());
+  private final UUID demoOrganization;
 
   private final InvoiceRepository repository;
   private final InvoiceEventRepository eventRepository;
@@ -61,7 +61,8 @@ public class InvoiceService {
                         GstinValidationService gstinValidator,
                         VendorService vendorService,
                         InvoiceRuleEngine ruleEngine,
-                        ObjectMapper mapper) {
+                        ObjectMapper mapper,
+                        @Value("${invoice.demo-organization-id:bc1e6b1a-8837-3056-b676-6cae794de216}") String demoOrgId) {
     this.repository = repository;
     this.eventRepository = eventRepository;
     this.extractor = extractor;
@@ -73,6 +74,7 @@ public class InvoiceService {
     this.vendorService = vendorService;
     this.ruleEngine = ruleEngine;
     this.mapper = mapper;
+    this.demoOrganization = UUID.fromString(demoOrgId);
   }
 
   @Transactional
@@ -90,7 +92,7 @@ public class InvoiceService {
     UUID id = UUID.randomUUID();
     Invoice invoice = new Invoice();
     invoice.setId(id);
-    invoice.setOrganizationId(DEMO_ORGANIZATION);
+    invoice.setOrganizationId(demoOrganization);
     invoice.setStatus(InvoiceStatus.PROCESSING);
     invoice.setCreatedAt(Instant.now());
     invoice.setUpdatedAt(Instant.now());
@@ -133,30 +135,58 @@ public class InvoiceService {
     InvoiceDuplicateService.DuplicateCheckResult dup = duplicateService.check(invoice);
     invoice.setDuplicateScore(dup.score());
     invoice.setDuplicateInvoiceId(dup.duplicateInvoiceId());
+    invoice.setDuplicateLabel(deriveDuplicateLabel(dup.score()));
 
     // Phase 4: Vendor matching
-    Vendor vendor = vendorService.matchOrCreate(
+    VendorService.VendorMatchResult vendorMatch = vendorService.matchOrCreate(
         invoice.getSupplierGstin(), invoice.getSupplierName(), invoice.getTotalAmount());
-    invoice.setVendor(vendor);
+    invoice.setVendor(vendorMatch.vendor());
+
+    // Rule engine evaluation
+    List<InvoiceRuleEngine.RuleResult> ruleResults = ruleEngine.evaluate(invoice);
+    List<ValidationResult> ruleValidation = ruleResults.stream()
+        .map(r -> new ValidationResult(r.rule().name(),
+            r.passed() ? RuleStatus.PASS : RuleStatus.FAIL, r.message()))
+        .toList();
 
     // Phase 3.5: Structured validation
     List<ValidationResult> validationResults = validator.validate(invoice);
-    boolean failed = validator.hasFailures(validationResults);
-    String firstFailure = validationResults.stream()
+    boolean validationFailed = validator.hasFailures(validationResults);
+    boolean rulesFailed = ruleResults.stream().anyMatch(r -> !r.passed());
+
+    // Merge: validation results first, then any rule failures not already covered
+    List<ValidationResult> allResults = new java.util.ArrayList<>(validationResults);
+    ruleValidation.stream()
+        .filter(ValidationResult::isFailed)
+        .filter(rv -> allResults.stream().noneMatch(v -> v.field() != null && v.field().equals(rv.field())))
+        .forEach(allResults::add);
+
+    boolean failed = validationFailed;
+    String firstFailure = allResults.stream()
         .filter(ValidationResult::isFailed).map(ValidationResult::message).findFirst().orElse(null);
     invoice.setValidationMessage(firstFailure);
-    invoice.setStatus(determineStatus(invoice, failed));
+    InvoiceStatus newStatus = determineStatus(invoice, failed);
+    invoice.setStatus(newStatus);
     invoice.setUpdatedAt(Instant.now());
 
-    InvoiceDto saved = toDto(repository.save(invoice), validationResults);
+    InvoiceDto saved = toDto(repository.save(invoice), allResults, vendorMatch.anomalyFlag());
     String eventType = failed ? "VALIDATION_FAILED" : "VALIDATED";
     String eventMsg = failed ? ("Validation failed: " + firstFailure) : "Deterministic invoice validation passed";
     record(invoice, eventType, eventMsg);
+
+    if (newStatus == InvoiceStatus.AUTO_APPROVED) {
+      record(invoice, "AUTO_APPROVED", "Auto-approved: confidence=" + invoice.getExtractionConfidence()
+          + "%, arithmetic=PASS, duplicate<80, GSTIN valid, amount<500000");
+    } else if (newStatus == InvoiceStatus.REVIEW_REQUIRED) {
+      String reasons = buildAutoApproveBlockReasons(invoice);
+      record(invoice, "REVIEW_REQUIRED", "Sent to review queue. Blocking: " + reasons);
+    }
+
     return saved;
   }
 
   @Transactional
-  public InvoiceDto updateReview(UUID id, InvoiceReviewRequest req) {
+  public InvoiceDto updateReview(UUID id, InvoiceReviewRequest req, String actor) {
     Invoice invoice = repository.findByIdWithLines(id)
         .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
 
@@ -190,6 +220,7 @@ public class InvoiceService {
     InvoiceDuplicateService.DuplicateCheckResult dup = duplicateService.check(invoice);
     invoice.setDuplicateScore(dup.score());
     invoice.setDuplicateInvoiceId(dup.duplicateInvoiceId());
+    invoice.setDuplicateLabel(deriveDuplicateLabel(dup.score()));
 
     List<ValidationResult> validationResults = validator.validate(invoice);
     boolean failed = validator.hasFailures(validationResults);
@@ -199,10 +230,10 @@ public class InvoiceService {
     invoice.setStatus(failed ? InvoiceStatus.FAILED : InvoiceStatus.REVIEW_REQUIRED);
     invoice.setUpdatedAt(Instant.now());
 
-    InvoiceDto saved = toDto(repository.save(invoice), validationResults);
+    InvoiceDto saved = toDto(repository.save(invoice), validationResults, false);
     record(invoice, "REVIEW_SAVED",
         failed ? "Review saved but validation failed: " + firstFailure
-               : "Review changes saved and validation passed");
+               : "Review changes saved and validation passed", actor);
     return saved;
   }
 
@@ -214,16 +245,16 @@ public class InvoiceService {
     String in = (invoiceNumber != null && invoiceNumber.isBlank()) ? null : invoiceNumber;
     if (status == null && sg == null && in == null && s == null) {
       return repository.findAllByOrderByCreatedAtDesc().stream()
-          .map(i -> toDto(i, null)).toList();
+          .map(i -> toDto(i, null, false)).toList();
     }
-    return repository.search(DEMO_ORGANIZATION, status, sg, in, s).stream()
-        .map(i -> toDto(i, null)).toList();
+    return repository.search(demoOrganization, status, sg, in, s).stream()
+        .map(i -> toDto(i, null, false)).toList();
   }
 
   @Transactional
   public InvoiceDto findById(UUID id) {
     return toDto(repository.findByIdWithLines(id)
-      .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id)), null);
+      .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id)), null, false);
   }
 
   @Transactional
@@ -238,7 +269,7 @@ public class InvoiceService {
   }
 
   @Transactional
-  public InvoiceDto approve(UUID id) {
+  public InvoiceDto approve(UUID id, String actor) {
     Invoice invoice = repository.findByIdWithLines(id)
       .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
     invoice.getStatus().transitionTo(InvoiceStatus.APPROVED);
@@ -247,30 +278,45 @@ public class InvoiceService {
     if (validator.hasFailures(validationResults)) {
       String msg = validationResults.stream()
           .filter(ValidationResult::isFailed).map(ValidationResult::message).findFirst().orElse("Validation failed");
-      record(invoice, "APPROVAL_BLOCKED", msg);
+      record(invoice, "APPROVAL_BLOCKED", msg, actor);
       throw new IllegalArgumentException(msg);
     }
     invoice.setStatus(InvoiceStatus.APPROVED);
     invoice.setUpdatedAt(Instant.now());
-    InvoiceDto saved = toDto(repository.save(invoice), validationResults);
-    record(invoice, "APPROVED", "Invoice approved after validation");
+    InvoiceDto saved = toDto(repository.save(invoice), validationResults, false);
+    record(invoice, "APPROVED", "Invoice approved after validation", actor);
     return saved;
   }
 
   @Transactional
-  public InvoiceDto reject(UUID id, String reason) {
+  public InvoiceDto reject(UUID id, String reason, String actor) {
     Invoice invoice = repository.findByIdWithLines(id)
         .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
     invoice.getStatus().transitionTo(InvoiceStatus.REJECTED);
     invoice.setStatus(InvoiceStatus.REJECTED);
     invoice.setUpdatedAt(Instant.now());
-    InvoiceDto saved = toDto(repository.save(invoice), null);
-    record(invoice, "REJECTED", reason != null && !reason.isBlank() ? reason : "Invoice rejected by reviewer");
+    InvoiceDto saved = toDto(repository.save(invoice), null, false);
+    record(invoice, "REJECTED", reason != null && !reason.isBlank() ? reason : "Invoice rejected by reviewer", actor);
+    return saved;
+  }
+
+  @Transactional
+  public InvoiceDto reprocess(UUID id) {
+    Invoice invoice = repository.findByIdWithLines(id)
+        .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
+    if (invoice.getStatus() != InvoiceStatus.FAILED) {
+      throw new IllegalStateException("Only FAILED invoices can be reprocessed");
+    }
+    invoice.getStatus().transitionTo(InvoiceStatus.REVIEW_REQUIRED);
+    invoice.setStatus(InvoiceStatus.REVIEW_REQUIRED);
+    invoice.setUpdatedAt(Instant.now());
+    InvoiceDto saved = toDto(repository.save(invoice), null, false);
+    record(invoice, "REPROCESS_REQUESTED", "Invoice manually moved to review queue for reprocessing");
     return saved;
   }
 
   public DashboardStatsDto getDashboardStats() {
-    List<Object[]> rows = repository.dashboardStats(DEMO_ORGANIZATION);
+    List<Object[]> rows = repository.dashboardStats(demoOrganization);
     Object[] row = rows.isEmpty() ? new Object[9] : rows.get(0);
     return new DashboardStatsDto(
         toLong(row[0]),
@@ -316,13 +362,37 @@ public class InvoiceService {
     double confidence = invoice.getExtractionConfidence() == null
         ? 0 : invoice.getExtractionConfidence().doubleValue();
     boolean eligible = confidence >= 95.0
-        && invoice.getArithmeticStatus() == ArithmeticStatus.PASS
+        && (invoice.getArithmeticStatus() == ArithmeticStatus.PASS || invoice.getArithmeticStatus() == ArithmeticStatus.WARN)
         && (invoice.getDuplicateScore() == null || invoice.getDuplicateScore() < 80)
         && invoice.getSupplierGstinStatus() == GstinValidationStatus.VALID
         && invoice.getCustomerGstinStatus() == GstinValidationStatus.VALID
         && invoice.getTotalAmount() != null
         && invoice.getTotalAmount().compareTo(new BigDecimal("500000")) < 0;
     return eligible ? InvoiceStatus.AUTO_APPROVED : InvoiceStatus.REVIEW_REQUIRED;
+  }
+
+  private String buildAutoApproveBlockReasons(Invoice invoice) {
+    List<String> reasons = new java.util.ArrayList<>();
+    double conf = invoice.getExtractionConfidence() == null ? 0 : invoice.getExtractionConfidence().doubleValue();
+    if (conf < 95.0) reasons.add("confidence=" + conf + "%<95%");
+    if (invoice.getArithmeticStatus() == ArithmeticStatus.FAIL) reasons.add("arithmetic=FAIL");
+    if (invoice.getDuplicateScore() != null && invoice.getDuplicateScore() >= 80)
+      reasons.add("duplicate=" + invoice.getDuplicateScore());
+    if (invoice.getSupplierGstinStatus() != GstinValidationStatus.VALID)
+      reasons.add("supplierGstin=" + invoice.getSupplierGstinStatus());
+    if (invoice.getCustomerGstinStatus() != GstinValidationStatus.VALID
+        && invoice.getCustomerGstinStatus() != GstinValidationStatus.NOT_PROVIDED)
+      reasons.add("customerGstin=" + invoice.getCustomerGstinStatus());
+    if (invoice.getTotalAmount() != null && invoice.getTotalAmount().compareTo(new BigDecimal("500000")) >= 0)
+      reasons.add("amount>=500000");
+    return reasons.isEmpty() ? "none" : String.join(", ", reasons);
+  }
+
+  private String deriveDuplicateLabel(Integer score) {
+    if (score == null) return null;
+    if (score >= 90) return "CONFIRMED";
+    if (score >= 60) return "POTENTIAL";
+    return null;
   }
 
   private long toLong(Object o) {
@@ -333,6 +403,12 @@ public class InvoiceService {
   private void record(Invoice invoice, String type, String message) {
     eventRepository.save(new InvoiceEvent(invoice.getId(), type,
         message == null || message.isBlank() ? type : message));
+  }
+
+  private void record(Invoice invoice, String type, String message, String actor) {
+    eventRepository.save(new InvoiceEvent(invoice.getId(), type,
+        message == null || message.isBlank() ? type : message,
+        actor == null || actor.isBlank() ? "SYSTEM" : actor));
   }
 
   private String buildCsv(Invoice invoice) {
@@ -448,7 +524,7 @@ public class InvoiceService {
     return l;
   }
 
-  private InvoiceDto toDto(Invoice i, List<ValidationResult> validationResults) {
+  private InvoiceDto toDto(Invoice i, List<ValidationResult> validationResults, boolean vendorAnomalyFlag) {
     Map<String, BigDecimal> confidence = new LinkedHashMap<>();
     if (i.getFieldConfidence() != null && !i.getFieldConfidence().isBlank()) {
       try {
@@ -486,6 +562,7 @@ public class InvoiceService {
       i.getSupplierGstinStatus(), i.getCustomerGstinStatus(),
       i.getArithmeticStatus(),
       i.getDuplicateScore(), i.getDuplicateInvoiceId(),
-      vendorId, vendorName);
+      vendorId, vendorName,
+      i.getDuplicateLabel(), vendorAnomalyFlag);
   }
 }

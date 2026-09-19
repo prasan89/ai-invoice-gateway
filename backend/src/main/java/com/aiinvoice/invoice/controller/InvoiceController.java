@@ -71,17 +71,27 @@ public class InvoiceController {
   }
 
   @PutMapping("/{id}/review")
-  public InvoiceDto review(@PathVariable UUID id, @Valid @RequestBody InvoiceReviewRequest request) {
-    return service.updateReview(id, request);
+  public InvoiceDto review(@PathVariable UUID id, @Valid @RequestBody InvoiceReviewRequest request,
+                           @RequestHeader(value = "X-User-Name", required = false) String actor) {
+    return service.updateReview(id, request, actor);
   }
 
   @PostMapping("/{id}/approve")
-  public InvoiceDto approve(@PathVariable UUID id) { return service.approve(id); }
+  public InvoiceDto approve(@PathVariable UUID id,
+                            @RequestHeader(value = "X-User-Name", required = false) String actor) {
+    return service.approve(id, actor);
+  }
 
   @PostMapping("/{id}/reject")
   public InvoiceDto reject(@PathVariable UUID id,
-                            @RequestBody(required = false) RejectRequest req) {
-    return service.reject(id, req != null ? req.reason() : null);
+                            @RequestBody(required = false) RejectRequest req,
+                            @RequestHeader(value = "X-User-Name", required = false) String actor) {
+    return service.reject(id, req != null ? req.reason() : null, actor);
+  }
+
+  @PostMapping("/{id}/reprocess")
+  public InvoiceDto reprocess(@PathVariable UUID id) {
+    return service.reprocess(id);
   }
 
   @GetMapping("/{id}/document")

@@ -230,7 +230,7 @@ public class OpenAIInvoiceExtractor implements InvoiceExtractor {
         decimal(n, "totalAmount"),
         BigDecimal.valueOf(overall).setScale(2, java.math.RoundingMode.HALF_UP),
         InvoiceStatus.EXTRACTED, null, lines, conf, null, null, null,
-        null, null, null, null, null, null, null, null);
+        null, null, null, null, null, null, null, null, null, false);
 
     return new InvoiceExtractionResult(invoice, overall);
   }

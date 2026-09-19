@@ -17,6 +17,8 @@ public class VendorService {
         "\\b(PVT|PRIVATE|LTD|LIMITED|LLP|INC|CORP|CO)\\b\\.?\\s*$",
         Pattern.CASE_INSENSITIVE);
 
+    public record VendorMatchResult(Vendor vendor, boolean anomalyFlag) {}
+
     private final VendorRepository repository;
 
     public VendorService(VendorRepository repository) {
@@ -24,19 +26,25 @@ public class VendorService {
     }
 
     @Transactional
-    public Vendor matchOrCreate(String gstin, String supplierName, BigDecimal invoiceTotal) {
-        if (gstin == null || gstin.isBlank()) return null;
+    public VendorMatchResult matchOrCreate(String gstin, String supplierName, BigDecimal invoiceTotal) {
+        if (gstin == null || gstin.isBlank()) return new VendorMatchResult(null, false);
         BigDecimal amount = invoiceTotal == null ? BigDecimal.ZERO : invoiceTotal;
         return repository.findByGstin(gstin)
             .map(v -> updateStats(v, amount))
-            .orElseGet(() -> createNew(gstin, supplierName, amount));
+            .orElseGet(() -> new VendorMatchResult(createNew(gstin, supplierName, amount), false));
     }
 
-    private Vendor updateStats(Vendor v, BigDecimal amount) {
+    private VendorMatchResult updateStats(Vendor v, BigDecimal amount) {
+        boolean anomaly = false;
+        if (v.getTotalInvoiceCount() > 0 && v.getTotalInvoiceValue().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal avg = v.getTotalInvoiceValue().divide(
+                BigDecimal.valueOf(v.getTotalInvoiceCount()), 2, java.math.RoundingMode.HALF_UP);
+            anomaly = amount.compareTo(avg.multiply(new BigDecimal("3.0"))) > 0;
+        }
         v.setTotalInvoiceCount(v.getTotalInvoiceCount() + 1);
         v.setTotalInvoiceValue(v.getTotalInvoiceValue().add(amount));
         v.setLastSeenAt(Instant.now());
-        return repository.save(v);
+        return new VendorMatchResult(repository.save(v), anomaly);
     }
 
     private Vendor createNew(String gstin, String name, BigDecimal amount) {

@@ -44,5 +44,7 @@ public record InvoiceDto(
   Integer duplicateScore,
   UUID duplicateInvoiceId,
   UUID vendorId,
-  String vendorNormalizedName
+  String vendorNormalizedName,
+  String duplicateLabel,
+  boolean vendorAnomalyFlag
 ) {}

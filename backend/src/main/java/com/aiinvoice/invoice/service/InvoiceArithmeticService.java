@@ -3,6 +3,7 @@ package com.aiinvoice.invoice.service;
 import com.aiinvoice.invoice.domain.ArithmeticStatus;
 import com.aiinvoice.invoice.entity.Invoice;
 import com.aiinvoice.invoice.entity.InvoiceLine;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -13,7 +14,15 @@ import java.util.List;
 @Service
 public class InvoiceArithmeticService {
 
-    private static final BigDecimal TOLERANCE = new BigDecimal("0.05");
+    private final BigDecimal tolerance;
+    private final BigDecimal warnThreshold;
+
+    public InvoiceArithmeticService(
+            @Value("${invoice.arithmetic.tolerance:0.05}") BigDecimal tolerance,
+            @Value("${invoice.arithmetic.warn-threshold:0.50}") BigDecimal warnThreshold) {
+        this.tolerance = tolerance;
+        this.warnThreshold = warnThreshold;
+    }
 
     public record LineDiscrepancy(int lineIndex, String field, BigDecimal expected, BigDecimal actual) {}
 
@@ -25,6 +34,7 @@ public class InvoiceArithmeticService {
         }
 
         List<LineDiscrepancy> issues = new ArrayList<>();
+        BigDecimal maxDiscrepancy = BigDecimal.ZERO;
         BigDecimal lineSum = BigDecimal.ZERO;
 
         List<InvoiceLine> lines = invoice.getLines();
@@ -37,8 +47,12 @@ public class InvoiceArithmeticService {
                 BigDecimal expectedTaxable = line.getQuantity()
                     .multiply(line.getUnitPrice()).subtract(discount)
                     .setScale(2, RoundingMode.HALF_UP);
-                if (line.getTaxableValue() != null && diff(expectedTaxable, line.getTaxableValue())) {
-                    issues.add(new LineDiscrepancy(i, "taxableValue", expectedTaxable, line.getTaxableValue()));
+                if (line.getTaxableValue() != null) {
+                    BigDecimal d = absGap(expectedTaxable, line.getTaxableValue());
+                    if (d.compareTo(tolerance) > 0) {
+                        issues.add(new LineDiscrepancy(i, "taxableValue", expectedTaxable, line.getTaxableValue()));
+                        maxDiscrepancy = maxDiscrepancy.max(d);
+                    }
                 }
             }
 
@@ -50,8 +64,12 @@ public class InvoiceArithmeticService {
                     .add(nvl(line.getIgstAmount()))
                     .add(nvl(line.getCessAmount()))
                     .setScale(2, RoundingMode.HALF_UP);
-                if (line.getLineTotal() != null && diff(expectedTotal, line.getLineTotal())) {
-                    issues.add(new LineDiscrepancy(i, "lineTotal", expectedTotal, line.getLineTotal()));
+                if (line.getLineTotal() != null) {
+                    BigDecimal d = absGap(expectedTotal, line.getLineTotal());
+                    if (d.compareTo(tolerance) > 0) {
+                        issues.add(new LineDiscrepancy(i, "lineTotal", expectedTotal, line.getLineTotal()));
+                        maxDiscrepancy = maxDiscrepancy.max(d);
+                    }
                 }
             }
 
@@ -61,25 +79,33 @@ public class InvoiceArithmeticService {
         }
 
         // Invoice total vs sum of line totals
-        if (invoice.getTotalAmount() != null && diff(lineSum, invoice.getTotalAmount())) {
-            issues.add(new LineDiscrepancy(-1, "totalAmount", lineSum, invoice.getTotalAmount()));
+        if (invoice.getTotalAmount() != null) {
+            BigDecimal d = absGap(lineSum, invoice.getTotalAmount());
+            if (d.compareTo(tolerance) > 0) {
+                issues.add(new LineDiscrepancy(-1, "totalAmount", lineSum, invoice.getTotalAmount()));
+                maxDiscrepancy = maxDiscrepancy.max(d);
+            }
         }
 
         // subtotal + taxAmount vs totalAmount
         if (invoice.getSubtotal() != null && invoice.getTaxAmount() != null && invoice.getTotalAmount() != null) {
             BigDecimal expectedTotal = invoice.getSubtotal().add(invoice.getTaxAmount())
                 .setScale(2, RoundingMode.HALF_UP);
-            if (diff(expectedTotal, invoice.getTotalAmount())) {
+            BigDecimal d = absGap(expectedTotal, invoice.getTotalAmount());
+            if (d.compareTo(tolerance) > 0) {
                 issues.add(new LineDiscrepancy(-1, "subtotal+tax", expectedTotal, invoice.getTotalAmount()));
+                maxDiscrepancy = maxDiscrepancy.max(d);
             }
         }
 
-        ArithmeticStatus status = issues.isEmpty() ? ArithmeticStatus.PASS : ArithmeticStatus.FAIL;
+        if (issues.isEmpty()) return new ArithmeticCheckResult(ArithmeticStatus.PASS, List.of());
+        ArithmeticStatus status = maxDiscrepancy.compareTo(warnThreshold) <= 0
+            ? ArithmeticStatus.WARN : ArithmeticStatus.FAIL;
         return new ArithmeticCheckResult(status, issues);
     }
 
-    private boolean diff(BigDecimal a, BigDecimal b) {
-        return a.subtract(b).abs().compareTo(TOLERANCE) > 0;
+    private BigDecimal absGap(BigDecimal a, BigDecimal b) {
+        return a.subtract(b).abs();
     }
 
     private BigDecimal nvl(BigDecimal v) {

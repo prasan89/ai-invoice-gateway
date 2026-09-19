@@ -59,6 +59,8 @@ public class Invoice {
 
   @Column(name="duplicate_invoice_id") private UUID duplicateInvoiceId;
 
+  @Column(name="duplicate_label") private String duplicateLabel;
+
   @Enumerated(EnumType.STRING)
   @Column(name="supplier_gstin_status") private GstinValidationStatus supplierGstinStatus;
 
