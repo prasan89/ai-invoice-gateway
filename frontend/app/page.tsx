@@ -46,6 +46,7 @@ export default function Home(){
   const[rejectReason,setRejectReason]=useState("");
   const[showReject,setShowReject]=useState(false);
   const debounceRef=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const mountedRef=useRef(false);
 
   const loadStats=useCallback(async()=>{
     try{const r=await fetch(API+"/api/v1/invoices/stats",{cache:"no-store"});if(r.ok)setStats(await r.json())}catch{/* silent */}
@@ -64,11 +65,14 @@ export default function Home(){
   },[query,statusFilter]);
 
   useEffect(()=>{
-    Promise.all([loadInvoices(),loadStats()]).catch(e=>setError(e instanceof Error?e.message:"Load failed"));
+    Promise.all([loadInvoices(),loadStats()])
+      .catch(e=>setError(e instanceof Error?e.message:"Load failed"))
+      .finally(()=>{mountedRef.current=true});
   },[]);// eslint-disable-line react-hooks/exhaustive-deps
 
-  // Debounced search
+  // Debounced search — skip on first mount
   useEffect(()=>{
+    if(!mountedRef.current)return;
     if(debounceRef.current)clearTimeout(debounceRef.current);
     debounceRef.current=setTimeout(()=>{
       loadInvoices(query,statusFilter).catch(e=>setError(e instanceof Error?e.message:"Search failed"));
@@ -171,7 +175,7 @@ export default function Home(){
       <span className="badge">Phase 4</span>
     </header>
 
-    {/* 7 KPI cards */}
+    {/* 8 KPI cards — fills 4×2 grid */}
     <section className="cards cards-7">
       <div className="card"><div className="muted">Total invoices</div><div className="metric">{stats?.totalCount??invoices.length}</div></div>
       <div className="card"><div className="muted">Total value</div><div className="metric metric-sm">{money(stats?.totalValue??0)}</div></div>
@@ -180,6 +184,7 @@ export default function Home(){
       <div className="card card-ok"><div className="muted">Auto-approved</div><div className="metric">{stats?.autoApprovedCount??0}</div></div>
       <div className="card card-err"><div className="muted">Failed/Rejected</div><div className="metric">{(stats?.failedCount??0)+(stats?.rejectedCount??0)}</div></div>
       <div className="card card-dup"><div className="muted">Duplicates</div><div className="metric">{stats?.potentialDuplicatesCount??0}</div></div>
+      <div className="card"><div className="muted">Avg confidence</div><div className="metric">{stats?Number(stats.averageConfidence).toFixed(1)+"%":"—"}</div></div>
     </section>
 
     <section className="upload">
