@@ -22,6 +22,11 @@ import com.aiinvoice.webhook.service.WebhookDispatcher;
 import com.aiinvoice.workflow.service.WorkflowEngine;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import jakarta.transaction.Transactional;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -32,6 +37,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +59,7 @@ public class InvoiceService {
   private final WorkflowEngine workflowEngine;
   private final WebhookDispatcher webhookDispatcher;
   private final ObjectMapper mapper;
+  private final EntityManager em;
 
   public InvoiceService(InvoiceRepository repository,
                         InvoiceEventRepository eventRepository,
@@ -67,7 +74,8 @@ public class InvoiceService {
                         InvoiceRuleEngine ruleEngine,
                         WorkflowEngine workflowEngine,
                         WebhookDispatcher webhookDispatcher,
-                        ObjectMapper mapper) {
+                        ObjectMapper mapper,
+                        EntityManager em) {
     this.repository = repository;
     this.eventRepository = eventRepository;
     this.extractor = extractor;
@@ -82,6 +90,7 @@ public class InvoiceService {
     this.workflowEngine = workflowEngine;
     this.webhookDispatcher = webhookDispatcher;
     this.mapper = mapper;
+    this.em = em;
   }
 
   @Transactional
@@ -260,10 +269,35 @@ public class InvoiceService {
   @Transactional
   public List<InvoiceDto> findAll(InvoiceStatus status, String supplierGstin,
                                    String invoiceNumber, String search) {
-    String s = (search != null && search.isBlank()) ? null : search;
-    String sg = (supplierGstin != null && supplierGstin.isBlank()) ? null : supplierGstin;
-    String in = (invoiceNumber != null && invoiceNumber.isBlank()) ? null : invoiceNumber;
-    return repository.search(TenantContext.getOrDefault(), status, sg, in, s).stream()
+    String s = (search == null || search.isBlank()) ? null : search.trim();
+    String sg = (supplierGstin == null || supplierGstin.isBlank()) ? null : supplierGstin.trim();
+    String in = (invoiceNumber == null || invoiceNumber.isBlank()) ? null : invoiceNumber.trim();
+    UUID orgId = TenantContext.getOrDefault();
+
+    CriteriaBuilder cb = em.getCriteriaBuilder();
+    CriteriaQuery<Invoice> cq = cb.createQuery(Invoice.class);
+    Root<Invoice> root = cq.from(Invoice.class);
+    root.fetch("lines", jakarta.persistence.criteria.JoinType.LEFT);
+    cq.distinct(true);
+
+    List<Predicate> predicates = new ArrayList<>();
+    predicates.add(cb.equal(root.get("organizationId"), orgId));
+    if (status != null) predicates.add(cb.equal(root.get("status"), status));
+    if (sg != null) predicates.add(cb.equal(root.get("supplierGstin"), sg));
+    if (in != null) predicates.add(cb.like(cb.lower(root.get("invoiceNumber")), "%" + in.toLowerCase() + "%"));
+    if (s != null) {
+      String pattern = "%" + s.toLowerCase() + "%";
+      predicates.add(cb.or(
+        cb.like(cb.lower(root.get("invoiceNumber")), pattern),
+        cb.like(cb.lower(cb.coalesce(root.get("supplierName"), "")), pattern),
+        cb.like(cb.lower(cb.coalesce(root.get("customerName"), "")), pattern),
+        cb.like(cb.lower(cb.coalesce(root.get("supplierGstin"), "")), pattern)
+      ));
+    }
+    cq.where(predicates.toArray(new Predicate[0]));
+    cq.orderBy(cb.desc(root.get("createdAt")));
+
+    return em.createQuery(cq).getResultList().stream()
         .map(i -> toDto(i, null, false)).toList();
   }
 
