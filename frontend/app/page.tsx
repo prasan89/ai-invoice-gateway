@@ -149,7 +149,10 @@ export default function Home(){
   return <main className="page">
     <header className="header">
       <div><div className="brand">AI Invoice Gateway</div><div className="muted">AI-powered Indian GST invoice processing</div></div>
-      <span className="badge">Phase 4</span>
+      <div style={{display:"flex",gap:12,alignItems:"center"}}>
+        <a href="/email" style={{color:"#6b7280",fontSize:13}}>Email Automation</a>
+        <span className="badge">Phase 7</span>
+      </div>
     </header>
 
     <section className="cards cards-7">

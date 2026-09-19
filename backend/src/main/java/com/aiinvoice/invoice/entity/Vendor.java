@@ -32,4 +32,20 @@ public class Vendor {
 
     @Column(name = "last_seen_at", nullable = false)
     private Instant lastSeenAt;
+
+    // Phase 5.3 — Supplier intelligence
+    @Column(name = "typical_gst_rate")
+    private BigDecimal typicalGstRate;
+
+    @Column(name = "typical_payment_days")
+    private Integer typicalPaymentDays;
+
+    @Column(name = "anomaly_count", nullable = false)
+    private int anomalyCount = 0;
+
+    @Column(name = "last_anomaly_at")
+    private Instant lastAnomalyAt;
+
+    @Column(name = "risk_tier", nullable = false, length = 20)
+    private String riskTier = "NORMAL";
 }

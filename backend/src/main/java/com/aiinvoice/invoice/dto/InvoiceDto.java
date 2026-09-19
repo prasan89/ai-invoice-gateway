@@ -46,5 +46,18 @@ public record InvoiceDto(
   UUID vendorId,
   String vendorNormalizedName,
   String duplicateLabel,
-  boolean vendorAnomalyFlag
+  boolean vendorAnomalyFlag,
+  // Phase 5.1 — GST portal verification
+  String supplierLegalName,
+  String supplierPortalStatus,   // ACTIVE, CANCELLED, SUSPENDED, UNKNOWN
+  String supplierTradeName,
+  // Phase 5.2 — Advanced duplicate
+  String duplicateReason,
+  // Phase 5.3 — Supplier risk
+  String vendorRiskTier,         // LOW, NORMAL, ELEVATED, HIGH
+  Integer vendorAnomalyCount,
+  BigDecimal vendorTypicalGstRate,
+  // Phase 6 — PO matching
+  String poMatchStatus,          // MATCHED, PARTIAL, OVER_BILLED, UNDER_BILLED, UNMATCHED, null
+  UUID matchedPoId
 ) {}

@@ -61,6 +61,18 @@ public class Invoice {
 
   @Column(name="duplicate_label") private String duplicateLabel;
 
+  // Phase 5.2
+  @Column(name="duplicate_reason") private String duplicateReason;
+
+  // Phase 5.1 — cached GST portal result
+  @Column(name="supplier_legal_name")    private String supplierLegalName;
+  @Column(name="supplier_portal_status") private String supplierPortalStatus;
+  @Column(name="supplier_trade_name")    private String supplierTradeName;
+
+  // Phase 6
+  @Column(name="po_match_status") private String poMatchStatus;
+  @Column(name="matched_po_id")   private UUID matchedPoId;
+
   @Enumerated(EnumType.STRING)
   @Column(name="supplier_gstin_status") private GstinValidationStatus supplierGstinStatus;
 

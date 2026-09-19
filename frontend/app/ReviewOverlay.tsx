@@ -62,6 +62,7 @@ export default function ReviewOverlay(props:Props){
       {dupLabel==="CONFIRMED"?"🚫 Confirmed duplicate":"⚠ Potential duplicate"} — score {selected.duplicateScore}/100
       {dupLabel==="CONFIRMED"?" (same document or same invoice identity — blocked)":" (strong similarity — requires review)"}
       {selected.duplicateInvoiceId&&<> · matches <code>{selected.duplicateInvoiceId.slice(0,8)}…</code></>}
+      {selected.duplicateReason&&<> · <em>{selected.duplicateReason}</em></>}
     </div>}
 
     {autoApprovalBlocks.length>0&&<div className="review-blocked">
@@ -84,6 +85,9 @@ export default function ReviewOverlay(props:Props){
             {selected.arithmeticStatus&&<ArithBadge status={selected.arithmeticStatus}/>}
             {selected.vendorNormalizedName&&<span className="vendor-info">Vendor: {selected.vendorNormalizedName}</span>}
             {selected.vendorAnomalyFlag&&<span className="vendor-anomaly">⚠ Unusual amount for this vendor</span>}
+            {selected.vendorRiskTier&&selected.vendorRiskTier!=="NORMAL"&&<span className={`risk-tier risk-${selected.vendorRiskTier.toLowerCase()}`}>{selected.vendorRiskTier} RISK</span>}
+            {selected.vendorTypicalGstRate!=null&&<span className="vendor-info">Typical GST: {selected.vendorTypicalGstRate.toFixed(1)}%</span>}
+            {selected.poMatchStatus&&<span className={`po-match po-match-${selected.poMatchStatus.toLowerCase()}`}>PO: {selected.poMatchStatus.replace("_"," ")}</span>}
           </div>
         </div>
 
@@ -108,6 +112,11 @@ export default function ReviewOverlay(props:Props){
             <Field label="Supplier GSTIN" confidence={selected.fieldConfidence?.supplierGstin}><input value={selected.supplierGstin??""} onChange={e=>onUpdateField("supplierGstin",e.target.value)} readOnly={isTerminal}/></Field>
             <GstinBadge status={selected.supplierGstinStatus}/>
           </div>
+          {(selected.supplierLegalName||selected.supplierPortalStatus)&&<div className="portal-info">
+            {selected.supplierPortalStatus&&<span className={`portal-status portal-${selected.supplierPortalStatus.toLowerCase()}`}>{selected.supplierPortalStatus}</span>}
+            {selected.supplierLegalName&&<span className="portal-legal-name">{selected.supplierLegalName}</span>}
+            {selected.supplierTradeName&&selected.supplierTradeName!==selected.supplierLegalName&&<span className="portal-trade-name">({selected.supplierTradeName})</span>}
+          </div>}
           <Field label="Customer" confidence={selected.fieldConfidence?.customerName}><input value={selected.customerName??""} onChange={e=>onUpdateField("customerName",e.target.value)} readOnly={isTerminal}/></Field>
           <div className="gstin-row">
             <Field label="Customer GSTIN" confidence={selected.fieldConfidence?.customerGstin}><input value={selected.customerGstin??""} onChange={e=>onUpdateField("customerGstin",e.target.value)} readOnly={isTerminal}/></Field>

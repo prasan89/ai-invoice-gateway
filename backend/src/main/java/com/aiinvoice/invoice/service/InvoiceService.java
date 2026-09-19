@@ -47,6 +47,7 @@ public class InvoiceService {
   private final InvoiceDuplicateService duplicateService;
   private final InvoiceArithmeticService arithmeticService;
   private final GstinValidationService gstinValidator;
+  private final GstinPortalService gstinPortal;
   private final VendorService vendorService;
   private final InvoiceRuleEngine ruleEngine;
   private final ObjectMapper mapper;
@@ -59,6 +60,7 @@ public class InvoiceService {
                         InvoiceDuplicateService duplicateService,
                         InvoiceArithmeticService arithmeticService,
                         GstinValidationService gstinValidator,
+                        GstinPortalService gstinPortal,
                         VendorService vendorService,
                         InvoiceRuleEngine ruleEngine,
                         ObjectMapper mapper,
@@ -71,6 +73,7 @@ public class InvoiceService {
     this.duplicateService = duplicateService;
     this.arithmeticService = arithmeticService;
     this.gstinValidator = gstinValidator;
+    this.gstinPortal = gstinPortal;
     this.vendorService = vendorService;
     this.ruleEngine = ruleEngine;
     this.mapper = mapper;
@@ -123,9 +126,15 @@ public class InvoiceService {
     record(invoice, "EXTRACTED",
         "AI extraction completed with confidence " + invoice.getExtractionConfidence() + "%");
 
-    // Phase 4: GSTIN validation
+    // Phase 4: GSTIN validation (checksum)
     invoice.setSupplierGstinStatus(gstinValidator.validate(invoice.getSupplierGstin()));
     invoice.setCustomerGstinStatus(gstinValidator.validate(invoice.getCustomerGstin()));
+
+    // Phase 5.1: GST portal verification (async-safe, cached, gracefully offline)
+    GstinPortalService.GstinPortalResult portalResult = gstinPortal.verify(invoice.getSupplierGstin());
+    invoice.setSupplierLegalName(portalResult.legalName());
+    invoice.setSupplierTradeName(portalResult.tradeName());
+    invoice.setSupplierPortalStatus(portalResult.registrationStatus());
 
     // Phase 4: Arithmetic check
     InvoiceArithmeticService.ArithmeticCheckResult arith = arithmeticService.check(invoice);
@@ -136,10 +145,12 @@ public class InvoiceService {
     invoice.setDuplicateScore(dup.score());
     invoice.setDuplicateInvoiceId(dup.duplicateInvoiceId());
     invoice.setDuplicateLabel(deriveDuplicateLabel(dup.score()));
+    invoice.setDuplicateReason(dup.reason());
 
-    // Phase 4: Vendor matching
+    // Phase 4: Vendor matching (Phase 5.3: now passes taxAmount for GST rate tracking)
     VendorService.VendorMatchResult vendorMatch = vendorService.matchOrCreate(
-        invoice.getSupplierGstin(), invoice.getSupplierName(), invoice.getTotalAmount());
+        invoice.getSupplierGstin(), invoice.getSupplierName(),
+        invoice.getTotalAmount(), invoice.getTaxAmount());
     invoice.setVendor(vendorMatch.vendor());
 
     // Rule engine evaluation
@@ -549,6 +560,9 @@ public class InvoiceService {
 
     UUID vendorId = i.getVendor() != null ? i.getVendor().getId() : null;
     String vendorName = i.getVendor() != null ? i.getVendor().getNormalizedName() : null;
+    String vendorRiskTier = i.getVendor() != null ? i.getVendor().getRiskTier() : null;
+    Integer vendorAnomalyCount = i.getVendor() != null ? i.getVendor().getAnomalyCount() : null;
+    BigDecimal vendorTypicalGstRate = i.getVendor() != null ? i.getVendor().getTypicalGstRate() : null;
 
     return new InvoiceDto(
       i.getId(), i.getInvoiceNumber(), i.getInvoiceDate(), i.getCurrency(),
@@ -563,6 +577,12 @@ public class InvoiceService {
       i.getArithmeticStatus(),
       i.getDuplicateScore(), i.getDuplicateInvoiceId(),
       vendorId, vendorName,
-      i.getDuplicateLabel(), vendorAnomalyFlag);
+      i.getDuplicateLabel(), vendorAnomalyFlag,
+      // Phase 5
+      i.getSupplierLegalName(), i.getSupplierPortalStatus(), i.getSupplierTradeName(),
+      i.getDuplicateReason(),
+      vendorRiskTier, vendorAnomalyCount, vendorTypicalGstRate,
+      // Phase 6
+      i.getPoMatchStatus(), i.getMatchedPoId());
   }
 }

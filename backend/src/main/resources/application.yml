@@ -33,11 +33,24 @@ invoice:
   arithmetic:
     tolerance: ${INVOICE_ARITH_TOLERANCE:0.05}
     warn-threshold: ${INVOICE_ARITH_WARN_THRESHOLD:0.50}
+  email:
+    enabled: ${INVOICE_EMAIL_ENABLED:false}
+    host: ${INVOICE_EMAIL_HOST:}
+    port: ${INVOICE_EMAIL_PORT:993}
+    user: ${INVOICE_EMAIL_USER:}
+    password: ${INVOICE_EMAIL_PASSWORD:}
+    folder: ${INVOICE_EMAIL_FOLDER:INBOX}
+    ssl: ${INVOICE_EMAIL_SSL:true}
+    poll-interval-ms: ${INVOICE_EMAIL_POLL_INTERVAL_MS:300000}
 gstin:
   # Set to "test" to enable the allowlist below for end-to-end auto-approval testing.
   # In production, leave as "production" — only real checksum-valid GSTINs pass.
   validation:
     mode: ${GSTIN_VALIDATION_MODE:production}
+  portal:
+    # Set to true to call the GST portal sandbox API for legal name + registration status.
+    # Results are cached 24h in gstin_verifications. Falls back gracefully when offline.
+    enabled: ${GSTIN_PORTAL_ENABLED:false}
   # Comma-separated synthetic GSTINs that bypass checksum in test mode only.
   # GSTINs from sample invoices used in local testing:
   #   33AABCA1234A1ZQ — ABC Technologies (01_intrastate, 02_interstate)

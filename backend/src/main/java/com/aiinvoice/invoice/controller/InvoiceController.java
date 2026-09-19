@@ -10,6 +10,7 @@ import com.aiinvoice.invoice.entity.Invoice;
 import com.aiinvoice.invoice.repository.InvoiceRepository;
 import com.aiinvoice.invoice.service.InvoiceService;
 import com.aiinvoice.invoice.service.InvoiceStorageService;
+import com.aiinvoice.po.service.PoMatchingService;
 import jakarta.validation.Valid;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -28,12 +29,14 @@ public class InvoiceController {
   private final InvoiceService service;
   private final InvoiceRepository repository;
   private final InvoiceStorageService storage;
+  private final PoMatchingService poMatchingService;
 
   public InvoiceController(InvoiceService service, InvoiceRepository repository,
-                           InvoiceStorageService storage) {
+                           InvoiceStorageService storage, PoMatchingService poMatchingService) {
     this.service = service;
     this.repository = repository;
     this.storage = storage;
+    this.poMatchingService = poMatchingService;
   }
 
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -92,6 +95,17 @@ public class InvoiceController {
   @PostMapping("/{id}/reprocess")
   public InvoiceDto reprocess(@PathVariable UUID id) {
     return service.reprocess(id);
+  }
+
+  @PostMapping("/{id}/match-po")
+  public PoMatchingService.MatchResult matchPo(
+      @PathVariable UUID id,
+      @RequestParam UUID poId,
+      @RequestParam(required = false) UUID grnId) {
+    if (grnId != null) {
+      return poMatchingService.matchThreeWay(id, poId, grnId);
+    }
+    return poMatchingService.matchTwoWay(id, poId);
   }
 
   @GetMapping("/{id}/document")

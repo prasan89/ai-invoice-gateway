@@ -12,21 +12,20 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Score bands:
- *   >= 90  CONFIRMED  — exact hash, or same invoice# + same supplier GSTIN
- *   60–89  POTENTIAL  — strong business similarity, not conclusive
- *   < 60   NONE       — no meaningful match
+ * Phase 5.2 — Advanced duplicate detection.
  *
- * Signal weights:
- *   Exact document hash                        → 100 (short-circuit)
- *   invoice# + supplierGstin                   →  90 (same invoice identity)
- *   invoice# alone                             →  50
- *   supplierGstin + amount (≤0.01) + date      →  35
- *   supplierGstin + amount (≤0.01)             →  25
- *   Any single signal alone (gstin/amount/date)→   0 (too weak — a supplier
- *                                                      can legitimately issue
- *                                                      many invoices for the same
- *                                                      amount to the same customer)
+ * Score bands:
+ *   100  CONFIRMED  — exact document hash
+ *    95  CONFIRMED  — same invoice# + same supplier GSTIN (invoice identity)
+ *    85  CONFIRMED  — same invoice# + same supplier GSTIN + amount changed (amount-modified duplicate)
+ *    80  CONFIRMED  — same invoice# + same supplier GSTIN + date changed (date-modified duplicate)
+ *    75  POTENTIAL  — same invoice# + different supplier GSTIN (number collision / supplier switch)
+ *    70  POTENTIAL  — same supplier GSTIN + same amount (±1%) + same date (same-day same-value)
+ *    65  POTENTIAL  — same supplier GSTIN + same amount (±0.01) (possible re-upload)
+ *    60  POTENTIAL  — same supplier GSTIN + amount within 5% + same date (near-identical)
+ *     0  NONE       — no meaningful match
+ *
+ * Each result carries a human-readable `reason` string explaining the match type.
  */
 @Service
 public class InvoiceDuplicateService {
@@ -37,7 +36,7 @@ public class InvoiceDuplicateService {
         this.repository = repository;
     }
 
-    public record DuplicateCheckResult(int score, UUID duplicateInvoiceId) {}
+    public record DuplicateCheckResult(int score, UUID duplicateInvoiceId, String reason) {}
 
     public String computeHash(byte[] fileBytes) {
         try {
@@ -49,17 +48,18 @@ public class InvoiceDuplicateService {
     }
 
     public DuplicateCheckResult check(Invoice invoice) {
-        // Exact document hash → confirmed duplicate
+        // Exact document hash → confirmed
         if (invoice.getDocumentHash() != null) {
             var exact = repository.findFirstByDocumentHashAndIdNot(
                 invoice.getDocumentHash(), invoice.getId());
             if (exact.isPresent()) {
-                return new DuplicateCheckResult(100, exact.get().getId());
+                return new DuplicateCheckResult(100, exact.get().getId(),
+                    "Exact document hash match — identical file re-uploaded");
             }
         }
 
         if (invoice.getOrganizationId() == null) {
-            return new DuplicateCheckResult(0, null);
+            return new DuplicateCheckResult(0, null, null);
         }
 
         List<Invoice> candidates = repository.findDuplicateCandidates(
@@ -70,40 +70,71 @@ public class InvoiceDuplicateService {
 
         int bestScore = 0;
         UUID bestId = null;
+        String bestReason = null;
 
         for (Invoice candidate : candidates) {
-            int score = businessScore(invoice, candidate);
-            if (score > bestScore) {
-                bestScore = score;
+            ScoredMatch match = score(invoice, candidate);
+            if (match.score() > bestScore) {
+                bestScore = match.score();
                 bestId = candidate.getId();
+                bestReason = match.reason();
             }
         }
 
-        return new DuplicateCheckResult(bestScore, bestId);
+        return new DuplicateCheckResult(bestScore, bestId, bestReason);
     }
 
-    private int businessScore(Invoice a, Invoice b) {
-        boolean sameInvNum = a.getInvoiceNumber() != null
-            && a.getInvoiceNumber().equals(b.getInvoiceNumber());
-        boolean sameSupplierGstin = a.getSupplierGstin() != null
-            && a.getSupplierGstin().equals(b.getSupplierGstin());
-        boolean sameAmount = a.getTotalAmount() != null && b.getTotalAmount() != null
-            && a.getTotalAmount().subtract(b.getTotalAmount()).abs()
-                .compareTo(new BigDecimal("0.01")) <= 0;
-        boolean sameDate = a.getInvoiceDate() != null
-            && a.getInvoiceDate().equals(b.getInvoiceDate());
+    private record ScoredMatch(int score, String reason) {}
 
-        // Same invoice identity — very strong
-        if (sameInvNum && sameSupplierGstin) return 90;
+    private ScoredMatch score(Invoice a, Invoice b) {
+        boolean sameInvNum        = a.getInvoiceNumber() != null && a.getInvoiceNumber().equals(b.getInvoiceNumber());
+        boolean sameSupplierGstin = a.getSupplierGstin() != null && a.getSupplierGstin().equals(b.getSupplierGstin());
+        boolean sameAmount        = withinAbsolute(a.getTotalAmount(), b.getTotalAmount(), new BigDecimal("0.01"));
+        boolean nearAmount        = withinPercent(a.getTotalAmount(), b.getTotalAmount(), 1.0);
+        boolean veryNearAmount    = withinPercent(a.getTotalAmount(), b.getTotalAmount(), 5.0);
+        boolean sameDate          = a.getInvoiceDate() != null && a.getInvoiceDate().equals(b.getInvoiceDate());
 
-        // Invoice number alone is a strong signal
-        if (sameInvNum) return 50;
+        // Same invoice identity (exact)
+        if (sameInvNum && sameSupplierGstin && sameAmount && sameDate)
+            return new ScoredMatch(95, "Same invoice number, supplier GSTIN, amount and date — confirmed identity duplicate");
 
-        // Business signals are only meaningful in combination
-        if (sameSupplierGstin && sameAmount && sameDate) return 35;
-        if (sameSupplierGstin && sameAmount) return 25;
+        // Amount-modified duplicate (same invoice# and supplier, different amount)
+        if (sameInvNum && sameSupplierGstin && !sameAmount)
+            return new ScoredMatch(85, "Same invoice number and supplier GSTIN but different amount — possible amount-modified duplicate");
 
-        // No single weak signal (GSTIN/amount/date alone) ever triggers a flag
-        return 0;
+        // Date-modified duplicate (same invoice# and supplier, different date)
+        if (sameInvNum && sameSupplierGstin)
+            return new ScoredMatch(80, "Same invoice number and supplier GSTIN but different date — possible date-modified duplicate");
+
+        // Invoice number collision with different supplier
+        if (sameInvNum && !sameSupplierGstin)
+            return new ScoredMatch(75, "Same invoice number but different supplier GSTIN — possible invoice number collision or supplier switch");
+
+        // Same-day same-value from same supplier (near-1%)
+        if (sameSupplierGstin && nearAmount && sameDate)
+            return new ScoredMatch(70, "Same supplier, same date, and amount within 1% — likely OCR variation or PDF re-upload");
+
+        // Same supplier exact amount (no date match)
+        if (sameSupplierGstin && sameAmount)
+            return new ScoredMatch(65, "Same supplier GSTIN and identical amount — possible re-upload of the same invoice");
+
+        // Near-identical amount within 5% from same supplier on same date
+        if (sameSupplierGstin && veryNearAmount && sameDate)
+            return new ScoredMatch(60, "Same supplier, same date, amount within 5% — near-identical invoice, requires review");
+
+        return new ScoredMatch(0, null);
+    }
+
+    private boolean withinAbsolute(BigDecimal a, BigDecimal b, BigDecimal tolerance) {
+        if (a == null || b == null) return false;
+        return a.subtract(b).abs().compareTo(tolerance) <= 0;
+    }
+
+    private boolean withinPercent(BigDecimal a, BigDecimal b, double pct) {
+        if (a == null || b == null) return false;
+        if (a.compareTo(BigDecimal.ZERO) == 0 && b.compareTo(BigDecimal.ZERO) == 0) return true;
+        if (a.compareTo(BigDecimal.ZERO) == 0) return false;
+        double diff = a.subtract(b).abs().doubleValue() / a.doubleValue() * 100.0;
+        return diff <= pct;
     }
 }

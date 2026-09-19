@@ -39,3 +39,24 @@
 .review-blocked-item{background:#f3e8ff;color:#6b21a8;border:1px solid #d8b4fe;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600}
 .dup-confirmed{font-size:13px}
 .vendor-anomaly{background:#fef3c7;color:#92400e;border:1px solid #fbbf24;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+/* Phase 5 / Phase 6 additions */
+.risk-tier{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.risk-low{background:#dcfce7;color:#166534}
+.risk-elevated{background:#fef3c7;color:#92400e}
+.risk-high{background:#fee2e2;color:#b91c1c}
+.po-match{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:#e0e7ff;color:#3730a3}
+.po-match-matched{background:#dcfce7;color:#166534}
+.po-match-partial{background:#fef3c7;color:#92400e}
+.po-match-over_billed,.po-match-unmatched{background:#fee2e2;color:#b91c1c}
+.po-match-under_billed{background:#fff7ed;color:#c2410c}
+.portal-info{display:flex;align-items:center;gap:8px;margin-top:4px;margin-bottom:8px;font-size:12px}
+.portal-status{padding:2px 8px;border-radius:999px;font-weight:700}
+.portal-active{background:#dcfce7;color:#166534}
+.portal-cancelled,.portal-suspended{background:#fee2e2;color:#b91c1c}
+.portal-unknown{background:#f3f4f6;color:#6b7280}
+.portal-legal-name{font-weight:600;color:#374151}
+.portal-trade-name{color:#6b7280}
+/* Phase 7 email */
+.email-status-success{color:#166534;font-weight:700}
+.email-status-partial{color:#92400e;font-weight:700}
+.email-status-failed{color:#b91c1c;font-weight:700}
