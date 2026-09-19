@@ -5,6 +5,9 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -33,6 +36,13 @@ public class Invoice {
   private String validationMessage;
   private Instant createdAt;
   private Instant updatedAt;
+
+  @Column(name="source_file_name") private String sourceFileName;
+  @Column(name="source_content_type") private String sourceContentType;
+  @Column(name="source_storage_path") private String sourceStoragePath;
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name="field_confidence", columnDefinition="jsonb")
+  private String fieldConfidence;
 
   @OneToMany(mappedBy="invoice", cascade=CascadeType.ALL, orphanRemoval=true)
   private List<InvoiceLine> lines = new ArrayList<>();

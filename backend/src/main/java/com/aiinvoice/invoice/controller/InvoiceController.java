@@ -1,10 +1,19 @@
 package com.aiinvoice.invoice.controller;
 
 import com.aiinvoice.invoice.dto.InvoiceDto;
+import com.aiinvoice.invoice.dto.InvoiceReviewRequest;
+import com.aiinvoice.invoice.entity.Invoice;
+import com.aiinvoice.invoice.repository.InvoiceRepository;
 import com.aiinvoice.invoice.service.InvoiceService;
+import com.aiinvoice.invoice.service.InvoiceStorageService;
+import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
 import java.util.List;
 import java.util.UUID;
 
@@ -13,7 +22,15 @@ import java.util.UUID;
 @CrossOrigin(origins = "http://localhost:3000")
 public class InvoiceController {
   private final InvoiceService service;
-  public InvoiceController(InvoiceService service) { this.service = service; }
+  private final InvoiceRepository repository;
+  private final InvoiceStorageService storage;
+
+  public InvoiceController(InvoiceService service, InvoiceRepository repository,
+                           InvoiceStorageService storage) {
+    this.service = service;
+    this.repository = repository;
+    this.storage = storage;
+  }
 
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public InvoiceDto upload(@RequestPart("file") MultipartFile file) {
@@ -24,6 +41,31 @@ public class InvoiceController {
 
   @GetMapping("/{id}") public InvoiceDto get(@PathVariable UUID id) { return service.findById(id); }
 
+  @PutMapping("/{id}/review")
+  public InvoiceDto review(@PathVariable UUID id, @Valid @RequestBody InvoiceReviewRequest request) {
+    return service.updateReview(id, request);
+  }
+
   @PostMapping("/{id}/approve")
   public InvoiceDto approve(@PathVariable UUID id) { return service.approve(id); }
+
+  @GetMapping("/{id}/document")
+  public ResponseEntity<Resource> document(@PathVariable UUID id) {
+    Invoice invoice = repository.findById(id)
+        .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
+    Resource resource = storage.load(invoice.getSourceStoragePath());
+
+    MediaType mediaType;
+    try {
+      mediaType = MediaType.parseMediaType(invoice.getSourceContentType());
+    } catch (Exception e) {
+      mediaType = MediaType.APPLICATION_OCTET_STREAM;
+    }
+
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION,
+            "inline; filename=\"" + invoice.getSourceFileName() + "\"")
+        .contentType(mediaType)
+        .body(resource);
+  }
 }
