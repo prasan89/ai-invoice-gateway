@@ -5,6 +5,7 @@ import com.aiinvoice.bulk.entity.BulkJobItem;
 import com.aiinvoice.bulk.repository.BulkJobItemRepository;
 import com.aiinvoice.bulk.repository.BulkJobRepository;
 import com.aiinvoice.invoice.service.InvoiceService;
+import com.aiinvoice.auth.context.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -37,11 +38,17 @@ public class BulkJobWorker {
             itemRepo.save(item);
 
             try {
-                byte[] bytes = Files.readAllBytes(Paths.get(item.getFilePath()));
-                StagedMultipartFile file = new StagedMultipartFile(bytes, item.getFileName());
-                var result = invoiceService.createFromUpload(file);
-                item.setStatus("COMPLETED");
-                item.setInvoiceId(result.id());
+                var job = jobRepo.findById(item.getJobId()).orElseThrow();
+                TenantContext.set(job.getOrganizationId());
+                try {
+                    byte[] bytes = Files.readAllBytes(Paths.get(item.getFilePath()));
+                    StagedMultipartFile file = new StagedMultipartFile(bytes, item.getFileName());
+                    var result = invoiceService.createFromUpload(file);
+                    item.setStatus("COMPLETED");
+                    item.setInvoiceId(result.id());
+                } finally {
+                    TenantContext.clear();
+                }
             } catch (Exception e) {
                 item.setStatus("FAILED");
                 item.setErrorMessage(e.getMessage());
