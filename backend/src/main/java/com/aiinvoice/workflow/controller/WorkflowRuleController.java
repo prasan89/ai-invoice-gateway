@@ -2,6 +2,7 @@ package com.aiinvoice.workflow.controller;
 
 import com.aiinvoice.workflow.dto.WorkflowRuleDto;
 import com.aiinvoice.workflow.service.WorkflowRuleService;
+import com.aiinvoice.auth.context.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,16 +17,14 @@ import java.util.UUID;
 public class WorkflowRuleController {
 
     private final WorkflowRuleService ruleService;
-    private static final UUID DEMO_ORG = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
     @GetMapping
     public List<WorkflowRuleDto> list() {
-        return ruleService.listByOrg(DEMO_ORG);
+        return ruleService.listByOrg(TenantContext.getOrDefault());
     }
 
     @PostMapping
     public ResponseEntity<WorkflowRuleDto> create(@RequestBody WorkflowRuleDto req) {
-        return ResponseEntity.ok(ruleService.create(DEMO_ORG, req));
+        return ResponseEntity.ok(ruleService.create(TenantContext.getOrDefault(), req));
     }
 
     @DeleteMapping("/{id}")
