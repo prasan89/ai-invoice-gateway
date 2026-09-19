@@ -17,7 +17,7 @@ import java.util.UUID;
 public class InvoiceStorageService {
   private final Path root;
 
-  public InvoiceStorageService(@Value("\${invoice.storage-dir:./data/invoices}") String storageDir) {
+  public InvoiceStorageService(@Value("${invoice.storage-dir:./data/invoices}") String storageDir) {
     this.root = Paths.get(storageDir).toAbsolutePath().normalize();
   }
 

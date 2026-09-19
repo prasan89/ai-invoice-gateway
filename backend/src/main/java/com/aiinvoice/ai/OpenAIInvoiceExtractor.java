@@ -45,8 +45,8 @@ public class OpenAIInvoiceExtractor implements InvoiceExtractor {
   private final String model;
 
   public OpenAIInvoiceExtractor(ObjectMapper mapper,
-      @Value("\${openai.api-key:}") String apiKey,
-      @Value("\${openai.model:gpt-5.6-luna}") String model) {
+      @Value("${openai.api-key:}") String apiKey,
+      @Value("${openai.model:gpt-5.6-luna}") String model) {
     this.mapper = mapper;
     this.apiKey = apiKey;
     this.model = model;
