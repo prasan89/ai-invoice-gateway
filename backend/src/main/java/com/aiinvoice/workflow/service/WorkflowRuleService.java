@@ -39,8 +39,8 @@ public class WorkflowRuleService {
     }
 
     @Transactional
-    public void delete(UUID id) {
-        ruleRepo.findById(id).ifPresent(r -> {
+    public void delete(UUID organizationId, UUID id) {
+        ruleRepo.findById(id).filter(r -> organizationId.equals(r.getOrganizationId())).ifPresent(r -> {
             r.setActive(false);
             ruleRepo.save(r);
         });
