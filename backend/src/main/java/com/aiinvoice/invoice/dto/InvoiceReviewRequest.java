@@ -15,6 +15,10 @@ public record InvoiceReviewRequest(
     String customerGstin,
     BigDecimal subtotal,
     BigDecimal taxAmount,
+    BigDecimal cgstAmount,
+    BigDecimal sgstAmount,
+    BigDecimal igstAmount,
+    BigDecimal cessAmount,
     BigDecimal totalAmount,
     @Valid List<InvoiceLineDto> lines
 ) {}

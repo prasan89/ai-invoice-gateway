@@ -30,6 +30,10 @@ public class Invoice {
   private String customerGstin;
   private BigDecimal subtotal;
   private BigDecimal taxAmount;
+  @Column(name="cgst_amount") private BigDecimal cgstAmount;
+  @Column(name="sgst_amount") private BigDecimal sgstAmount;
+  @Column(name="igst_amount") private BigDecimal igstAmount;
+  @Column(name="cess_amount") private BigDecimal cessAmount;
   private BigDecimal totalAmount;
   private BigDecimal extractionConfidence;
   @Enumerated(EnumType.STRING) private InvoiceStatus status;

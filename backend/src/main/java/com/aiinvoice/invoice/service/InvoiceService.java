@@ -15,8 +15,8 @@ import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.Instant;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -81,34 +81,29 @@ public class InvoiceService {
   }
 
   @Transactional
-  public InvoiceDto updateReview(UUID id, InvoiceReviewRequest request) {
+  public InvoiceDto updateReview(UUID id, InvoiceReviewRequest req) {
     Invoice invoice = repository.findByIdWithLines(id)
         .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
 
-    invoice.setInvoiceNumber(request.invoiceNumber());
-    invoice.setInvoiceDate(request.invoiceDate());
-    invoice.setCurrency(request.currency());
-    invoice.setSupplierName(request.supplierName());
-    invoice.setSupplierGstin(request.supplierGstin());
-    invoice.setCustomerName(request.customerName());
-    invoice.setCustomerGstin(request.customerGstin());
-    invoice.setSubtotal(request.subtotal());
-    invoice.setTaxAmount(request.taxAmount());
-    invoice.setTotalAmount(request.totalAmount());
+    invoice.setInvoiceNumber(req.invoiceNumber());
+    invoice.setInvoiceDate(req.invoiceDate());
+    invoice.setCurrency(req.currency());
+    invoice.setSupplierName(req.supplierName());
+    invoice.setSupplierGstin(req.supplierGstin());
+    invoice.setCustomerName(req.customerName());
+    invoice.setCustomerGstin(req.customerGstin());
+    invoice.setSubtotal(req.subtotal());
+    invoice.setTaxAmount(req.taxAmount());
+    invoice.setCgstAmount(req.cgstAmount());
+    invoice.setSgstAmount(req.sgstAmount());
+    invoice.setIgstAmount(req.igstAmount());
+    invoice.setCessAmount(req.cessAmount());
+    invoice.setTotalAmount(req.totalAmount());
 
     invoice.getLines().clear();
-    if (request.lines() != null) {
-      for (InvoiceLineDto d : request.lines()) {
-        InvoiceLine line = new InvoiceLine();
-        line.setId(UUID.randomUUID());
-        line.setDescription(d.description());
-        line.setQuantity(d.quantity());
-        line.setUnitPrice(d.unitPrice());
-        line.setDiscount(d.discount());
-        line.setTaxRate(d.taxRate());
-        line.setTaxAmount(d.taxAmount());
-        line.setLineTotal(d.lineTotal());
-        invoice.addLine(line);
+    if (req.lines() != null) {
+      for (InvoiceLineDto d : req.lines()) {
+        invoice.addLine(lineFromDto(d));
       }
     }
 
@@ -149,6 +144,10 @@ public class InvoiceService {
     invoice.setCustomerGstin(dto.customerGstin());
     invoice.setSubtotal(dto.subtotal());
     invoice.setTaxAmount(dto.taxAmount());
+    invoice.setCgstAmount(dto.cgstAmount());
+    invoice.setSgstAmount(dto.sgstAmount());
+    invoice.setIgstAmount(dto.igstAmount());
+    invoice.setCessAmount(dto.cessAmount());
     invoice.setTotalAmount(dto.totalAmount());
     invoice.setExtractionConfidence(dto.extractionConfidence());
 
@@ -162,18 +161,32 @@ public class InvoiceService {
     invoice.getLines().clear();
     if (dto.lines() != null) {
       for (InvoiceLineDto d : dto.lines()) {
-        InvoiceLine l = new InvoiceLine();
-        l.setId(UUID.randomUUID());
-        l.setDescription(d.description());
-        l.setQuantity(d.quantity());
-        l.setUnitPrice(d.unitPrice());
-        l.setDiscount(d.discount());
-        l.setTaxRate(d.taxRate());
-        l.setTaxAmount(d.taxAmount());
-        l.setLineTotal(d.lineTotal());
-        invoice.addLine(l);
+        invoice.addLine(lineFromDto(d));
       }
     }
+  }
+
+  private InvoiceLine lineFromDto(InvoiceLineDto d) {
+    InvoiceLine l = new InvoiceLine();
+    l.setId(UUID.randomUUID());
+    l.setDescription(d.description());
+    l.setHsnSac(d.hsnSac());
+    l.setQuantity(d.quantity());
+    l.setUnitPrice(d.unitPrice());
+    l.setDiscount(d.discount());
+    l.setTaxableValue(d.taxableValue());
+    l.setTaxRate(d.taxRate());
+    l.setTaxAmount(d.taxAmount());
+    l.setCgstRate(d.cgstRate());
+    l.setCgstAmount(d.cgstAmount());
+    l.setSgstRate(d.sgstRate());
+    l.setSgstAmount(d.sgstAmount());
+    l.setIgstRate(d.igstRate());
+    l.setIgstAmount(d.igstAmount());
+    l.setCessRate(d.cessRate());
+    l.setCessAmount(d.cessAmount());
+    l.setLineTotal(d.lineTotal());
+    return l;
   }
 
   private InvoiceDto toDto(Invoice i) {
@@ -185,15 +198,27 @@ public class InvoiceService {
       } catch (Exception ignored) {}
     }
 
+    List<InvoiceLineDto> lines = i.getLines().stream().map(l -> new InvoiceLineDto(
+        l.getId(), l.getDescription(), l.getHsnSac(),
+        l.getQuantity(), l.getUnitPrice(), l.getDiscount(), l.getTaxableValue(),
+        l.getTaxRate(), l.getTaxAmount(),
+        l.getCgstRate(), l.getCgstAmount(),
+        l.getSgstRate(), l.getSgstAmount(),
+        l.getIgstRate(), l.getIgstAmount(),
+        l.getCessRate(), l.getCessAmount(),
+        l.getLineTotal()
+    )).toList();
+
+    String docUrl = i.getSourceStoragePath() != null
+        ? "/api/v1/invoices/" + i.getId() + "/document" : null;
+
     return new InvoiceDto(
       i.getId(), i.getInvoiceNumber(), i.getInvoiceDate(), i.getCurrency(),
       i.getSupplierName(), i.getSupplierGstin(), i.getCustomerName(), i.getCustomerGstin(),
-      i.getSubtotal(), i.getTaxAmount(), i.getTotalAmount(), i.getExtractionConfidence(),
-      i.getStatus(), i.getValidationMessage(),
-      i.getLines().stream().map(l -> new InvoiceLineDto(l.getId(), l.getDescription(),
-        l.getQuantity(), l.getUnitPrice(), l.getDiscount(), l.getTaxRate(),
-        l.getTaxAmount(), l.getLineTotal())).toList(),
-      confidence, i.getSourceFileName(), i.getSourceContentType(),
-      "/api/v1/invoices/" + i.getId() + "/document");
+      i.getSubtotal(), i.getTaxAmount(),
+      i.getCgstAmount(), i.getSgstAmount(), i.getIgstAmount(), i.getCessAmount(),
+      i.getTotalAmount(), i.getExtractionConfidence(),
+      i.getStatus(), i.getValidationMessage(), lines, confidence,
+      i.getSourceFileName(), i.getSourceContentType(), docUrl);
   }
 }
