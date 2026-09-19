@@ -15,8 +15,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
   @Query("SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.lines ORDER BY i.createdAt DESC")
   List<Invoice> findAllByOrderByCreatedAtDesc();
 
-  @Query("SELECT i FROM Invoice i LEFT JOIN FETCH i.lines WHERE i.id = :id")
-  Optional<Invoice> findByIdWithLines(UUID id);
+  @Query("SELECT i FROM Invoice i LEFT JOIN FETCH i.lines WHERE i.id = :id AND i.organizationId = :orgId")
+  Optional<Invoice> findByIdWithLinesAndOrganizationId(@Param("id") UUID id, @Param("orgId") UUID orgId);
 
   @Query("""
     SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.lines
