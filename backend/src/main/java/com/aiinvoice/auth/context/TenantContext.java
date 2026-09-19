@@ -8,7 +8,7 @@ public final class TenantContext {
     public static UUID get() { return TENANT.get(); }
     public static UUID getOrDefault() {
         UUID t = TENANT.get();
-        return t != null ? t : UUID.fromString("00000000-0000-0000-0000-000000000001");
+        return t != null ? t : UUID.fromString("bc1e6b1a-8837-3056-b676-6cae794de216");
     }
     public static void clear() { TENANT.remove(); }
 }
