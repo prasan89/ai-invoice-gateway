@@ -6,6 +6,7 @@ import com.aiinvoice.po.dto.PurchaseOrderDto;
 import com.aiinvoice.po.entity.PoLine;
 import com.aiinvoice.po.entity.PurchaseOrder;
 import com.aiinvoice.po.repository.PurchaseOrderRepository;
+import com.aiinvoice.auth.context.TenantContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,15 +21,13 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class PurchaseOrderService {
 
-    private static final UUID DEMO_ORG = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
     private final PurchaseOrderRepository poRepository;
 
     @Transactional
     public PurchaseOrderDto create(CreatePoRequest req) {
         PurchaseOrder po = new PurchaseOrder();
         po.setId(UUID.randomUUID());
-        po.setOrganizationId(DEMO_ORG);
+        po.setOrganizationId(TenantContext.getOrDefault());
         po.setPoNumber(req.poNumber());
         po.setSupplierGstin(req.supplierGstin());
         po.setSupplierName(req.supplierName());
@@ -67,7 +66,7 @@ public class PurchaseOrderService {
 
     public List<PurchaseOrderDto> listByOrg() {
         return poRepository.findAll().stream()
-            .filter(p -> DEMO_ORG.equals(p.getOrganizationId()))
+            .filter(p -> TenantContext.getOrDefault().equals(p.getOrganizationId()))
             .map(this::toDto)
             .toList();
     }
