@@ -10,6 +10,8 @@ import com.aiinvoice.invoice.entity.Invoice;
 import com.aiinvoice.invoice.repository.InvoiceRepository;
 import com.aiinvoice.invoice.service.InvoiceService;
 import com.aiinvoice.invoice.service.InvoiceStorageService;
+import com.aiinvoice.auth.context.TenantContext;
+import com.aiinvoice.security.FileTypeValidator;
 import com.aiinvoice.po.service.PoMatchingService;
 import com.aiinvoice.security.FileTypeValidator;
 import jakarta.validation.Valid;
@@ -32,6 +34,7 @@ public class InvoiceController {
   private final InvoiceStorageService storage;
   private final PoMatchingService poMatchingService;
   private final FileTypeValidator fileTypeValidator;
+  private final FileTypeValidator fileTypeValidator;
 
   public InvoiceController(InvoiceService service, InvoiceRepository repository,
                            InvoiceStorageService storage, PoMatchingService poMatchingService,
@@ -40,6 +43,7 @@ public class InvoiceController {
     this.repository = repository;
     this.storage = storage;
     this.poMatchingService = poMatchingService;
+    this.fileTypeValidator = fileTypeValidator;
     this.fileTypeValidator = fileTypeValidator;
   }
 
@@ -118,6 +122,7 @@ public class InvoiceController {
   @GetMapping("/{id}/document")
   public ResponseEntity<Resource> document(@PathVariable UUID id) {
     Invoice invoice = repository.findById(id)
+        .filter(i -> TenantContext.getOrDefault().equals(i.getOrganizationId()))
         .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
     Resource resource = storage.load(invoice.getSourceStoragePath());
 
