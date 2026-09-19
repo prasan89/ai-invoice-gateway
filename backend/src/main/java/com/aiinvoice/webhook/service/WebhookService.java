@@ -38,8 +38,8 @@ public class WebhookService {
     }
 
     @Transactional
-    public void delete(UUID id) {
-        subRepo.findById(id).ifPresent(s -> {
+    public void delete(UUID organizationId, UUID id) {
+        subRepo.findById(id).filter(s -> organizationId.equals(s.getOrganizationId())).ifPresent(s -> {
             s.setActive(false);
             subRepo.save(s);
         });
