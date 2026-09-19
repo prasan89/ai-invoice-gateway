@@ -18,6 +18,10 @@ import com.aiinvoice.invoice.entity.InvoiceEvent;
 import com.aiinvoice.invoice.entity.InvoiceLine;
 import com.aiinvoice.invoice.repository.InvoiceEventRepository;
 import com.aiinvoice.invoice.repository.InvoiceRepository;
+import com.aiinvoice.auth.context.TenantContext;
+import com.aiinvoice.webhook.service.WebhookDispatcher;
+import com.aiinvoice.workflow.dto.WorkflowDecision;
+import com.aiinvoice.workflow.service.WorkflowEngine;
 import com.aiinvoice.webhook.service.WebhookDispatcher;
 import com.aiinvoice.workflow.service.WorkflowEngine;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -40,8 +44,6 @@ import java.util.UUID;
 
 @Service
 public class InvoiceService {
-  private final UUID demoOrganization;
-
   private final InvoiceRepository repository;
   private final InvoiceEventRepository eventRepository;
   private final InvoiceExtractor extractor;
@@ -195,9 +197,14 @@ public class InvoiceService {
     String eventMsg = failed ? ("Validation failed: " + firstFailure) : "Deterministic invoice validation passed";
     record(invoice, eventType, eventMsg);
 
+    if (workflowDecision != null) {
+      record(invoice, "WORKFLOW_APPLIED",
+          "Rule '" + workflowDecision.ruleName() + "' routed invoice to " + workflowDecision.nextState());
+    }
     if (newStatus == InvoiceStatus.AUTO_APPROVED) {
       record(invoice, "AUTO_APPROVED", "Auto-approved: confidence=" + invoice.getExtractionConfidence()
           + "%, arithmetic=PASS, duplicate<80, GSTIN valid, amount<500000");
+      webhookDispatcher.dispatch(invoice.getOrganizationId(), "invoice.approved", webhookPayload(invoice, null));
     } else if (newStatus == InvoiceStatus.REVIEW_REQUIRED) {
       String reasons = buildAutoApproveBlockReasons(invoice);
       record(invoice, "REVIEW_REQUIRED", "Sent to review queue. Blocking: " + reasons);
@@ -208,7 +215,7 @@ public class InvoiceService {
 
   @Transactional
   public InvoiceDto updateReview(UUID id, InvoiceReviewRequest req, String actor) {
-    Invoice invoice = repository.findByIdWithLines(id)
+    Invoice invoice = repository.findByIdWithLinesAndOrganizationId(id, TenantContext.getOrDefault())
         .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id));
 
     invoice.setInvoiceNumber(req.invoiceNumber());
@@ -268,7 +275,7 @@ public class InvoiceService {
       return repository.findAllByOrderByCreatedAtDesc().stream()
           .map(i -> toDto(i, null, false)).toList();
     }
-    return repository.search(demoOrganization, status, sg, in, s).stream()
+    return repository.search(TenantContext.getOrDefault(), status, sg, in, s).stream()
         .map(i -> toDto(i, null, false)).toList();
   }
 
@@ -280,7 +287,7 @@ public class InvoiceService {
 
   @Transactional
   public List<InvoiceEventDto> history(UUID id) {
-    if (!repository.existsById(id)) {
+    if (!repository.findByIdWithLinesAndOrganizationId(id, TenantContext.getOrDefault()).isPresent()) {
       throw new IllegalArgumentException("Invoice not found: " + id);
     }
     return eventRepository.findByInvoiceIdOrderByCreatedAtDesc(id).stream()
@@ -344,7 +351,7 @@ public class InvoiceService {
   }
 
   public DashboardStatsDto getDashboardStats() {
-    List<Object[]> rows = repository.dashboardStats(demoOrganization);
+    List<Object[]> rows = repository.dashboardStats(TenantContext.getOrDefault());
     Object[] row = rows.isEmpty() ? new Object[9] : rows.get(0);
     return new DashboardStatsDto(
         toLong(row[0]),
@@ -411,7 +418,43 @@ public class InvoiceService {
     return eligible ? InvoiceStatus.AUTO_APPROVED : InvoiceStatus.REVIEW_REQUIRED;
   }
 
-  private String buildAutoApproveBlockReasons(Invoice invoice) {
+  private InvoiceStatus parseWorkflowState(String nextState) {
+    try {
+      return InvoiceStatus.valueOf(nextState.trim().toUpperCase());
+    } catch (Exception e) {
+      throw new IllegalArgumentException("Unsupported workflow nextState: " + nextState);
+    }
+  }
+
+  private Map<String, Object> workflowFields(Invoice invoice) {
+    Map<String, Object> fields = new LinkedHashMap<>();
+    fields.put("invoiceNumber", invoice.getInvoiceNumber());
+    fields.put("supplierGstin", invoice.getSupplierGstin());
+    fields.put("customerGstin", invoice.getCustomerGstin());
+    fields.put("supplierGstinStatus", invoice.getSupplierGstinStatus() == null ? null : invoice.getSupplierGstinStatus().name());
+    fields.put("customerGstinStatus", invoice.getCustomerGstinStatus() == null ? null : invoice.getCustomerGstinStatus().name());
+    fields.put("supplierName", invoice.getSupplierName());
+    fields.put("totalAmount", invoice.getTotalAmount());
+    fields.put("subtotal", invoice.getSubtotal());
+    fields.put("taxAmount", invoice.getTaxAmount());
+    fields.put("extractionConfidence", invoice.getExtractionConfidence());
+    fields.put("arithmeticStatus", invoice.getArithmeticStatus() == null ? null : invoice.getArithmeticStatus().name());
+    fields.put("duplicateScore", invoice.getDuplicateScore() == null ? 0 : invoice.getDuplicateScore());
+    return fields;
+  }
+
+  private Map<String, Object> webhookPayload(Invoice invoice, String reason) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("invoiceId", invoice.getId());
+    payload.put("organizationId", invoice.getOrganizationId());
+    payload.put("invoiceNumber", invoice.getInvoiceNumber());
+    payload.put("supplierName", invoice.getSupplierName());
+    payload.put("totalAmount", invoice.getTotalAmount());
+    if (reason != null) payload.put("reason", reason);
+    return payload;
+  }
+
+  private String buildAutoApproveBlockReasons(Invoice invoice)
     List<String> reasons = new java.util.ArrayList<>();
     double conf = invoice.getExtractionConfidence() == null ? 0 : invoice.getExtractionConfidence().doubleValue();
     if (conf < 95.0) reasons.add("confidence=" + conf + "%<95%");
