@@ -230,7 +230,7 @@ public class ClaudeInvoiceExtractor implements InvoiceExtractor {
 
     Map<String, BigDecimal> conf = new LinkedHashMap<>();
     n.path("fieldConfidence").fields().forEachRemaining(e ->
-        conf.put(e.getKey(), BigDecimal.valueOf(e.getValue().asDouble()).setScale(2)));
+        conf.put(e.getKey(), BigDecimal.valueOf(e.getValue().asDouble()).setScale(2, java.math.RoundingMode.HALF_UP)));
 
     double overall = conf.values().stream()
         .mapToDouble(BigDecimal::doubleValue).average().orElse(0);
