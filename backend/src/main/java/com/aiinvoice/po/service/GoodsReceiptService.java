@@ -61,6 +61,7 @@ public class GoodsReceiptService {
 
     public GoodsReceiptDto getById(UUID id) {
         return grnRepository.findByIdWithLines(id)
+            .filter(g -> TenantContext.getOrDefault().equals(g.getOrganizationId()))
             .map(this::toDto)
             .orElseThrow(() -> new NoSuchElementException("GRN not found: " + id));
     }
