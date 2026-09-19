@@ -52,7 +52,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     FROM Invoice i
     WHERE i.organizationId = :orgId
     """)
-  Object[] dashboardStats(@Param("orgId") UUID orgId);
+  List<Object[]> dashboardStats(@Param("orgId") UUID orgId);
 
   @Query("""
     SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.lines

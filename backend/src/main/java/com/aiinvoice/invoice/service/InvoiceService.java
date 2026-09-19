@@ -267,7 +267,8 @@ public class InvoiceService {
   }
 
   public DashboardStatsDto getDashboardStats() {
-    Object[] row = repository.dashboardStats(DEMO_ORGANIZATION);
+    List<Object[]> rows = repository.dashboardStats(DEMO_ORGANIZATION);
+    Object[] row = rows.isEmpty() ? new Object[9] : rows.get(0);
     return new DashboardStatsDto(
         toLong(row[0]),
         row[1] instanceof BigDecimal bd ? bd : BigDecimal.valueOf(((Number) row[1]).doubleValue()),
