@@ -206,6 +206,7 @@ public class InvoiceService {
     return saved;
   }
 
+  @Transactional
   public List<InvoiceDto> findAll(InvoiceStatus status, String supplierGstin,
                                    String invoiceNumber, String search) {
     String s = (search != null && search.isBlank()) ? null : search;
@@ -219,11 +220,13 @@ public class InvoiceService {
         .map(i -> toDto(i, null)).toList();
   }
 
+  @Transactional
   public InvoiceDto findById(UUID id) {
     return toDto(repository.findByIdWithLines(id)
       .orElseThrow(() -> new IllegalArgumentException("Invoice not found: " + id)), null);
   }
 
+  @Transactional
   public List<InvoiceEventDto> history(UUID id) {
     if (!repository.existsById(id)) {
       throw new IllegalArgumentException("Invoice not found: " + id);
