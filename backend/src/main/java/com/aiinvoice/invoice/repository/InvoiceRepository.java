@@ -12,6 +12,9 @@ import java.util.UUID;
 
 public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
+  @Query("SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.lines WHERE i.organizationId = :orgId ORDER BY i.createdAt DESC")
+  List<Invoice> findAllWithLinesByOrgId(@Param("orgId") UUID orgId);
+
   @Query("SELECT DISTINCT i FROM Invoice i LEFT JOIN FETCH i.lines ORDER BY i.createdAt DESC")
   List<Invoice> findAllByOrderByCreatedAtDesc();
 
