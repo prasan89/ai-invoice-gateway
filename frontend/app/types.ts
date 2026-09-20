@@ -2,8 +2,27 @@ export type Line={id?:string;description:string;hsnSac?:string;quantity?:number;
 export type ValidationResult={field:string|null;status:"PASS"|"FAIL";message:string};
 export type ArithmeticStatus="PASS"|"FAIL"|"WARN"|"PENDING";
 export type GstinStatus="VALID"|"INVALID"|"NOT_PROVIDED"|"PENDING";
-export type Invoice={id:string;invoiceNumber:string;invoiceDate?:string;currency:string;supplierName?:string;supplierGstin?:string;customerName?:string;customerGstin?:string;subtotal:number;taxAmount:number;cgstAmount?:number;sgstAmount?:number;igstAmount?:number;cessAmount?:number;totalAmount:number;extractionConfidence?:number;status:string;validationMessage?:string;lines:Line[];fieldConfidence?:Record<string,number>;sourceFileName?:string;sourceContentType?:string;documentUrl?:string;validationResults?:ValidationResult[];supplierGstinStatus?:GstinStatus;customerGstinStatus?:GstinStatus;arithmeticStatus?:ArithmeticStatus;duplicateScore?:number;duplicateInvoiceId?:string;vendorId?:string;vendorNormalizedName?:string;duplicateLabel?:string;vendorAnomalyFlag?:boolean;supplierLegalName?:string;supplierTradeName?:string;supplierPortalStatus?:string;duplicateReason?:string;vendorRiskTier?:string;vendorAnomalyCount?:number;vendorTypicalGstRate?:number;poMatchStatus?:string;matchedPoId?:string};
+export type Invoice={id:string;invoiceNumber:string;invoiceDate?:string;currency:string;supplierName?:string;supplierGstin?:string;customerName?:string;customerGstin?:string;subtotal:number;taxAmount:number;cgstAmount?:number;sgstAmount?:number;igstAmount?:number;cessAmount?:number;totalAmount:number;extractionConfidence?:number;status:string;validationMessage?:string;lines:Line[];fieldConfidence?:Record<string,number>;sourceFileName?:string;sourceContentType?:string;documentUrl?:string;validationResults?:ValidationResult[];supplierGstinStatus?:GstinStatus;customerGstinStatus?:GstinStatus;arithmeticStatus?:ArithmeticStatus;duplicateScore?:number;duplicateInvoiceId?:string;vendorId?:string;vendorNormalizedName?:string;duplicateLabel?:string;vendorAnomalyFlag?:boolean;supplierLegalName?:string;supplierTradeName?:string;supplierPortalStatus?:string;duplicateReason?:string;vendorRiskTier?:string;vendorAnomalyCount?:number;vendorTypicalGstRate?:number;poMatchStatus?:string;matchedPoId?:string;riskScore?:number;riskLevel?:string};
 export type HistoryEvent={id:string;eventType:string;message:string;createdAt:string;actor?:string};
 export type DashboardStats={totalCount:number;totalValue:number;reviewRequiredCount:number;approvedCount:number;failedCount:number;rejectedCount:number;autoApprovedCount:number;potentialDuplicatesCount:number;averageConfidence:number};
 export type EmailPollLog={id:string;polledAt:string;mailboxUser?:string;messagesFound:number;invoicesCreated:number;errors:number;errorDetail?:string;status:"SUCCESS"|"PARTIAL"|"FAILED"};
+
+// Phase 15: Billing
+export type SubscriptionPlan={id:string;name:string;displayName:string;monthlyPricePaise:number;invoiceLimit:number;apiKeyLimit:number;userLimit:number;features:string[]};
+export type Subscription={id:string;planName:string;planDisplayName:string;monthlyPricePaise:number;invoiceLimit:number;features:string[];status:string;currentPeriodStart:string;currentPeriodEnd:string;trialEnd?:string;invoiceCountCurrent:number;invoiceCountRemaining:number};
+export type UsageRecord={id:string;periodStart:string;periodEnd:string;invoiceCount:number;apiCalls:number;aiExtractions:number};
+
+// Phase 16: Anomaly
+export type Anomaly={id:string;invoiceId:string;riskScore:number;riskLevel:string;anomalyTypes:string[];reasons:string[];detectedAt:string;reviewOutcome?:string};
+
+// Phase 17: Copilot
+export type CopilotMessage={id:string;role:string;content:string;createdAt:string};
+export type CopilotSession={id:string;title:string;updatedAt:string;messages:CopilotMessage[]};
+
+// Phase 19: ERP
+export type ErpConnection={id:string;erpSystem:string;displayName:string;status:string;lastSyncedAt?:string};
+
+// Phase 20: Enterprise
+export type ApprovalChain={id:string;name:string;description?:string;minAmount?:number;maxAmount?:number;steps:unknown[]};
+export type ApprovalRequest={id:string;invoiceId:string;chainId:string;currentStep:number;status:string};
 

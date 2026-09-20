@@ -68,8 +68,26 @@ bulk:
   poll-interval-ms: ${BULK_POLL_INTERVAL_MS:5000}
 erp:
   system: ${ERP_SYSTEM:mock}
+# Phase 15: Billing & Razorpay
+razorpay:
+  key-id: ${RAZORPAY_KEY_ID:}
+  key-secret: ${RAZORPAY_KEY_SECRET:}
+  webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}
+# Phase 18: Object storage
+storage:
+  backend: ${STORAGE_BACKEND:local}
+  s3:
+    bucket: ${S3_BUCKET:invoice-gateway}
+    region: ${S3_REGION:ap-south-1}
+    endpoint: ${S3_ENDPOINT:}
+    access-key: ${S3_ACCESS_KEY:}
+    secret-key: ${S3_SECRET_KEY:}
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: ${METRICS_PROMETHEUS_ENABLED:false}

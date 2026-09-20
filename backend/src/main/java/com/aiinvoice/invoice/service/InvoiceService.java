@@ -1,5 +1,7 @@
 package com.aiinvoice.invoice.service;
 
+import com.aiinvoice.anomaly.service.AnomalyDetectionService;
+import com.aiinvoice.billing.service.BillingService;
 import com.aiinvoice.ai.InvoiceExtractionResult;
 import com.aiinvoice.ai.InvoiceExtractor;
 import com.aiinvoice.invoice.domain.ArithmeticStatus;
@@ -58,6 +60,8 @@ public class InvoiceService {
   private final InvoiceRuleEngine ruleEngine;
   private final WorkflowEngine workflowEngine;
   private final WebhookDispatcher webhookDispatcher;
+  private final AnomalyDetectionService anomalyService;
+  private final BillingService billingService;
   private final ObjectMapper mapper;
   private final EntityManager em;
 
@@ -74,6 +78,8 @@ public class InvoiceService {
                         InvoiceRuleEngine ruleEngine,
                         WorkflowEngine workflowEngine,
                         WebhookDispatcher webhookDispatcher,
+                        AnomalyDetectionService anomalyService,
+                        BillingService billingService,
                         ObjectMapper mapper,
                         EntityManager em) {
     this.repository = repository;
@@ -89,6 +95,8 @@ public class InvoiceService {
     this.ruleEngine = ruleEngine;
     this.workflowEngine = workflowEngine;
     this.webhookDispatcher = webhookDispatcher;
+    this.anomalyService = anomalyService;
+    this.billingService = billingService;
     this.mapper = mapper;
     this.em = em;
   }
@@ -198,6 +206,11 @@ public class InvoiceService {
     String eventType = failed ? "VALIDATION_FAILED" : "VALIDATED";
     String eventMsg = failed ? ("Validation failed: " + firstFailure) : "Deterministic invoice validation passed";
     record(invoice, eventType, eventMsg);
+
+    // Phase 16: run anomaly detection after save
+    try { anomalyService.detectAndSave(invoice); } catch (Exception e) { /* non-blocking */ }
+    // Phase 15: track usage
+    try { billingService.incrementInvoiceUsage(invoice.getOrganizationId()); } catch (Exception e) { /* non-blocking */ }
 
     if (newStatus == InvoiceStatus.AUTO_APPROVED) {
       record(invoice, "AUTO_APPROVED", "Auto-approved: confidence=" + invoice.getExtractionConfidence()

@@ -73,6 +73,10 @@ public class Invoice {
   @Column(name="po_match_status") private String poMatchStatus;
   @Column(name="matched_po_id")   private UUID matchedPoId;
 
+  // Phase 16
+  @Column(name="risk_score") private Integer riskScore = 0;
+  @Column(name="risk_level") private String riskLevel = "LOW";
+
   @Enumerated(EnumType.STRING)
   @Column(name="supplier_gstin_status") private GstinValidationStatus supplierGstinStatus;
 
