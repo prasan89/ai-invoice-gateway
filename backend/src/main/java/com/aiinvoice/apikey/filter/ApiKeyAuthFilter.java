@@ -2,6 +2,7 @@ package com.aiinvoice.apikey.filter;
 
 import com.aiinvoice.apikey.entity.ApiKey;
 import com.aiinvoice.apikey.service.ApiKeyService;
+import com.aiinvoice.auth.context.TenantContext;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +14,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 @Order(10)
@@ -32,8 +34,14 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 res.getWriter().write("{\"error\":\"Invalid or revoked API key\"}");
                 return;
             }
-            req.setAttribute("apiKeyOrgId", key.get().getOrganizationId());
+            UUID orgId = key.get().getOrganizationId();
+            req.setAttribute("apiKeyOrgId", orgId);
+            TenantContext.set(orgId);
         }
-        chain.doFilter(req, res);
+        try {
+            chain.doFilter(req, res);
+        } finally {
+            if (req.getHeader("X-API-Key") != null) TenantContext.clear();
+        }
     }
 }

@@ -105,6 +105,11 @@ public class InvoiceService {
   public InvoiceDto createFromUpload(MultipartFile file) {
     if (file.isEmpty()) throw new IllegalArgumentException("Invoice file is empty");
 
+    UUID orgId = TenantContext.getOrDefault();
+    if (!billingService.isWithinLimit(orgId)) {
+      throw new IllegalStateException("Invoice limit reached for current billing plan. Please upgrade to continue.");
+    }
+
     // Read bytes first — MultipartFile stream can only be consumed once
     byte[] fileBytes;
     try {
@@ -116,7 +121,6 @@ public class InvoiceService {
     UUID id = UUID.randomUUID();
     Invoice invoice = new Invoice();
     invoice.setId(id);
-    UUID orgId = TenantContext.getOrDefault();
     invoice.setOrganizationId(orgId);
     invoice.setStatus(InvoiceStatus.PROCESSING);
     invoice.setCreatedAt(Instant.now());

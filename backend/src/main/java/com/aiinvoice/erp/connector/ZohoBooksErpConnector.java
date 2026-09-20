@@ -1,19 +1,16 @@
 package com.aiinvoice.erp.connector;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Zoho Books connector via Zoho Books REST API v3.
- * Requires OAuth2 access token (refreshed via client_credentials or refresh_token).
- */
 @Component
 @Slf4j
 public class ZohoBooksErpConnector implements ErpConnector {
@@ -25,11 +22,17 @@ public class ZohoBooksErpConnector implements ErpConnector {
 
     @Override
     public ErpSyncResult push(UUID invoiceId, Map<String, Object> payload) {
-        String accessToken = (String) payload.get("zoho_access_token");
         String orgId = (String) payload.get("zoho_organization_id");
-        if (accessToken == null || orgId == null) {
-            return new ErpSyncResult(false, null, "zoho_access_token and zoho_organization_id are required");
+        if (orgId == null) {
+            return new ErpSyncResult(false, null, "zoho_organization_id is required");
         }
+
+        String accessToken = resolveAccessToken(payload);
+        if (accessToken == null) {
+            return new ErpSyncResult(false, null,
+                "zoho_access_token or (zoho_client_id + zoho_client_secret + zoho_refresh_token) are required");
+        }
+
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setBearerAuth(accessToken);
@@ -57,5 +60,39 @@ public class ZohoBooksErpConnector implements ErpConnector {
             log.warn("Zoho Books sync failed for invoice {}: {}", invoiceId, e.getMessage());
             return new ErpSyncResult(false, null, e.getMessage());
         }
+    }
+
+    private String resolveAccessToken(Map<String, Object> payload) {
+        String accessToken = (String) payload.get("zoho_access_token");
+        if (accessToken != null && !accessToken.isBlank()) return accessToken;
+
+        // Attempt token refresh using stored credentials
+        String clientId = (String) payload.get("zoho_client_id");
+        String clientSecret = (String) payload.get("zoho_client_secret");
+        String refreshToken = (String) payload.get("zoho_refresh_token");
+        if (clientId == null || clientSecret == null || refreshToken == null) return null;
+
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
+            body.add("grant_type", "refresh_token");
+            body.add("client_id", clientId);
+            body.add("client_secret", clientSecret);
+            body.add("refresh_token", refreshToken);
+
+            HttpEntity<MultiValueMap<String, String>> req = new HttpEntity<>(body, headers);
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                "https://accounts.zoho.in/oauth/v2/token",
+                HttpMethod.POST, req, Map.class);
+
+            if (resp.getStatusCode().is2xxSuccessful() && resp.getBody() != null) {
+                return (String) resp.getBody().get("access_token");
+            }
+        } catch (Exception e) {
+            log.warn("Zoho token refresh failed: {}", e.getMessage());
+        }
+        return null;
     }
 }

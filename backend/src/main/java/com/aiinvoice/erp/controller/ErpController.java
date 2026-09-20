@@ -28,6 +28,12 @@ public class ErpController {
         return erpSyncService.sync(TenantContext.getOrDefault(), id, payload);
     }
 
+    @PostMapping("/api/v1/invoices/{id}/erp-push-async")
+    public Map<String, String> erpPushAsync(@PathVariable UUID id, @RequestBody Map<String, Object> payload) {
+        erpSyncService.syncAsync(TenantContext.getOrDefault(), id, payload);
+        return Map.of("status", "queued", "invoiceId", id.toString());
+    }
+
     @GetMapping("/api/v1/erp/connections")
     public List<ErpConnection> listConnections() {
         return erpSyncService.listConnections(TenantContext.getOrDefault());

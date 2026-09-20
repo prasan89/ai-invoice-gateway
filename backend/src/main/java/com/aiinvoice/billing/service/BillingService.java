@@ -118,9 +118,15 @@ public class BillingService {
                 sub.setUpdatedAt(Instant.now());
                 subRepo.save(sub);
             });
-        } else if ("subscription.cancelled".equals(eventType) || "payment.failed".equals(eventType)) {
+        } else if ("payment.failed".equals(eventType)) {
             subRepo.findByOrganizationId(orgId).ifPresent(sub -> {
-                sub.setStatus("past_due".equals(eventType) ? "PAST_DUE" : "CANCELLED");
+                sub.setStatus("PAST_DUE");
+                sub.setUpdatedAt(Instant.now());
+                subRepo.save(sub);
+            });
+        } else if ("subscription.cancelled".equals(eventType)) {
+            subRepo.findByOrganizationId(orgId).ifPresent(sub -> {
+                sub.setStatus("CANCELLED");
                 sub.setUpdatedAt(Instant.now());
                 subRepo.save(sub);
             });

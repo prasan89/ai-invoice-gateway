@@ -1,5 +1,6 @@
 package com.aiinvoice.erp.service;
 
+import com.aiinvoice.auth.context.TenantContext;
 import com.aiinvoice.erp.connector.ErpConnector;
 import com.aiinvoice.erp.entity.ErpConnection;
 import com.aiinvoice.erp.entity.ErpSyncJob;
@@ -8,6 +9,7 @@ import com.aiinvoice.erp.repository.ErpSyncJobRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +19,8 @@ import java.util.*;
 @Service
 @Slf4j
 public class ErpSyncService {
+
+    private static final int MAX_RETRIES = 3;
 
     private final Map<String, ErpConnector> connectors;
     private final ErpSyncJobRepository syncJobRepo;
@@ -37,7 +41,7 @@ public class ErpSyncService {
     @Transactional
     public ErpSyncJob sync(UUID orgId, UUID invoiceId, Map<String, Object> payload) {
         String erpSystem = resolveErpSystem(orgId, payload);
-        ErpConnector connector = connectors.getOrDefault(erpSystem, connectors.get("mock"));
+        ErpConnector connector = connectors.getOrDefault(erpSystem, connectors.get("MOCK"));
         if (connector == null) connector = connectors.values().iterator().next();
 
         ErpSyncJob job = new ErpSyncJob();
@@ -46,36 +50,25 @@ public class ErpSyncService {
         job.setErpSystem(erpSystem);
         job.setCreatedAt(Instant.now());
 
-        // Merge connection config into payload
-        connectionRepo.findByOrganizationIdAndErpSystem(orgId, erpSystem).ifPresent(conn -> {
-            try {
-                Map<String, Object> config = objectMapper.readValue(conn.getConfig(), new TypeReference<>() {});
-                config.forEach(payload::putIfAbsent);
-            } catch (Exception e) { /* ignore parse errors */ }
-        });
+        mergeConnectionConfig(orgId, erpSystem, payload);
 
-        try {
-            ErpConnector.ErpSyncResult result = connector.push(invoiceId, payload);
-            job.setSyncStatus(result.success() ? "SYNCED" : "FAILED");
-            job.setResponse(writeJson(Map.of("externalRef", result.externalRef() != null ? result.externalRef() : "")));
-            job.setErrorDetail(result.errorDetail());
+        ErpConnector.ErpSyncResult result = pushWithRetry(connector, invoiceId, payload, erpSystem);
+        applyResult(job, result);
 
-            if (result.success()) {
-                connectionRepo.findByOrganizationIdAndErpSystem(orgId, erpSystem).ifPresent(conn -> {
-                    conn.setLastSyncedAt(Instant.now());
-                    conn.setStatus("CONNECTED");
-                    conn.setUpdatedAt(Instant.now());
-                    connectionRepo.save(conn);
-                });
-            }
-        } catch (Exception e) {
-            job.setSyncStatus("FAILED");
-            job.setErrorDetail(e.getMessage());
-            log.error("ERP sync failed for invoice {}: {}", invoiceId, e.getMessage());
-        }
+        if (result.success()) markConnectionConnected(orgId, erpSystem);
 
         job.setSyncedAt(Instant.now());
         return syncJobRepo.save(job);
+    }
+
+    @Async("bulkWorkerPool")
+    public void syncAsync(UUID orgId, UUID invoiceId, Map<String, Object> payload) {
+        try {
+            TenantContext.set(orgId);
+            sync(orgId, invoiceId, payload);
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     @Transactional
@@ -102,6 +95,56 @@ public class ErpSyncService {
 
     public List<ErpSyncJob> getByInvoice(UUID invoiceId) {
         return syncJobRepo.findByInvoiceIdOrderByCreatedAtDesc(invoiceId);
+    }
+
+    private ErpConnector.ErpSyncResult pushWithRetry(ErpConnector connector, UUID invoiceId,
+                                                      Map<String, Object> payload, String erpSystem) {
+        ErpConnector.ErpSyncResult last = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                last = connector.push(invoiceId, payload);
+                if (last.success()) return last;
+                log.warn("ERP sync attempt {}/{} failed for invoice {} ({}): {}",
+                    attempt, MAX_RETRIES, invoiceId, erpSystem, last.errorDetail());
+            } catch (Exception e) {
+                last = new ErpConnector.ErpSyncResult(false, null, e.getMessage());
+                log.warn("ERP sync attempt {}/{} threw for invoice {} ({}): {}",
+                    attempt, MAX_RETRIES, invoiceId, erpSystem, e.getMessage());
+            }
+            if (attempt < MAX_RETRIES) {
+                try { Thread.sleep(500L * attempt); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        return last != null ? last : new ErpConnector.ErpSyncResult(false, null, "All retries exhausted");
+    }
+
+    private void mergeConnectionConfig(UUID orgId, String erpSystem, Map<String, Object> payload) {
+        connectionRepo.findByOrganizationIdAndErpSystem(orgId, erpSystem).ifPresent(conn -> {
+            try {
+                Map<String, Object> config = objectMapper.readValue(conn.getConfig(), new TypeReference<>() {});
+                config.forEach(payload::putIfAbsent);
+            } catch (Exception e) {
+                log.debug("Could not parse ERP connection config for {}: {}", erpSystem, e.getMessage());
+            }
+        });
+    }
+
+    private void markConnectionConnected(UUID orgId, String erpSystem) {
+        connectionRepo.findByOrganizationIdAndErpSystem(orgId, erpSystem).ifPresent(conn -> {
+            conn.setLastSyncedAt(Instant.now());
+            conn.setStatus("CONNECTED");
+            conn.setUpdatedAt(Instant.now());
+            connectionRepo.save(conn);
+        });
+    }
+
+    private void applyResult(ErpSyncJob job, ErpConnector.ErpSyncResult result) {
+        job.setSyncStatus(result.success() ? "SYNCED" : "FAILED");
+        job.setResponse(writeJson(Map.of("externalRef", result.externalRef() != null ? result.externalRef() : "")));
+        job.setErrorDetail(result.errorDetail());
     }
 
     private String resolveErpSystem(UUID orgId, Map<String, Object> payload) {
