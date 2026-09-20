@@ -16,5 +16,52 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+    container_name: ai-invoice-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/invoice_gateway
+      SPRING_DATASOURCE_USERNAME: invoice
+      SPRING_DATASOURCE_PASSWORD: invoice
+      SPRING_JPA_HIBERNATE_DDL_AUTO: validate
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      S3_BUCKET: ${S3_BUCKET:-invoice-gateway}
+      S3_REGION: ${S3_REGION:-ap-south-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+    ports:
+      - "8080:8080"
+    volumes:
+      - invoice_storage:/app/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    container_name: ai-invoice-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "3000:3000"
+
 volumes:
   postgres_data:
+  invoice_storage:
