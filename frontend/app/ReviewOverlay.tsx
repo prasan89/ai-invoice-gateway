@@ -74,6 +74,7 @@ export default function ReviewOverlay(props:Props){
       <div className="document-panel">
         <div className="panel-title">Original document</div>
         {selected.sourceContentType?.startsWith("image/")
+          // eslint-disable-next-line @next/next/no-img-element
           ?<img className="document-image" src={API+(selected.documentUrl??"")} alt="Invoice"/>
           :<iframe className="document-frame" src={API+(selected.documentUrl??"")} title="Invoice document"/>}
       </div>
