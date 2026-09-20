@@ -52,8 +52,8 @@ export default function ReviewOverlay(props:Props){
         <div className="muted">{selected.sourceFileName??selected.invoiceNumber}</div>
       </div>
       <div className="header-actions">
-        <button className="btn secondary" onClick={()=>onExport("csv")}>Export CSV</button>
-        <button className="btn secondary" onClick={()=>onExport("json")}>Export JSON</button>
+        <button className="btn btn-secondary" onClick={()=>onExport("csv")}>Export CSV</button>
+        <button className="btn btn-secondary" onClick={()=>onExport("json")}>Export JSON</button>
         <button className="icon-btn" onClick={onClose}>×</button>
       </div>
     </div>
@@ -164,19 +164,19 @@ export default function ReviewOverlay(props:Props){
           <div className="section-heading">Reject reason</div>
           <textarea value={rejectReason} onChange={e=>onRejectReasonChange(e.target.value)} placeholder="Enter reason for rejection (optional)" rows={3}/>
           <div className="reject-actions">
-            <button className="btn" onClick={()=>onShowReject(false)}>Cancel</button>
-            <button className="btn danger" onClick={onReject} disabled={saving}>{saving?"Rejecting…":"Confirm reject"}</button>
+            <button className="btn btn-primary" onClick={()=>onShowReject(false)}>Cancel</button>
+            <button className="btn btn-danger" onClick={onReject} disabled={saving}>{saving?"Rejecting…":"Confirm reject"}</button>
           </div>
         </div>}
 
         <div className="actions">
           {selected.status==="FAILED"&&<>
-            <button className="btn secondary" onClick={onReprocess} disabled={saving}>{saving?"Processing…":"Reprocess"}</button>
+            <button className="btn btn-secondary" onClick={onReprocess} disabled={saving}>{saving?"Processing…":"Reprocess"}</button>
           </>}
           {!isTerminal&&selected.status!=="FAILED"&&<>
-            <button className="btn secondary" onClick={onSaveReview} disabled={saving}>{saving?"Saving…":"Save changes"}</button>
-            <button className="btn success" onClick={onApprove} disabled={saving}>{saving?"Approving…":"Approve"}</button>
-            <button className="btn danger" onClick={()=>onShowReject(true)} disabled={saving||showReject}>Reject</button>
+            <button className="btn btn-secondary" onClick={onSaveReview} disabled={saving}>{saving?"Saving…":"Save changes"}</button>
+            <button className="btn btn-success" onClick={onApprove} disabled={saving}>{saving?"Approving…":"Approve"}</button>
+            <button className="btn btn-danger" onClick={()=>onShowReject(true)} disabled={saving||showReject}>Reject</button>
           </>}
           {isTerminal&&<div className="muted">Invoice is {selected.status.replace("_"," ").toLowerCase()} — no further changes allowed.</div>}
         </div>
