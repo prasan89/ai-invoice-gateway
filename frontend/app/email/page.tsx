@@ -1,66 +1,100 @@
 "use client";
+import { useEffect, useState } from "react";
+import type { EmailPollLog } from "../types";
+import { API } from "../utils";
 
-import {useEffect,useState} from "react";
-import Link from "next/link";
-import type {EmailPollLog} from "../types";
-import {API} from "../utils";
+export default function EmailPage() {
+  const [logs, setLogs]           = useState<EmailPollLog[]>([]);
+  const [triggering, setTriggering] = useState(false);
+  const [err, setErr]             = useState<string | null>(null);
 
-export default function EmailPage(){
-  const[logs,setLogs]=useState<EmailPollLog[]>([]);
-  const[triggering,setTriggering]=useState(false);
-  const[err,setErr]=useState<string|null>(null);
+  async function load() {
+    try {
+      const r = await fetch(API + "/api/v1/email-poll/logs");
+      if (r.ok) setLogs(await r.json());
+    } catch { setErr("Could not load poll logs"); }
+  }
 
-  const load=async()=>{
-    try{
-      const r=await fetch(API+"/api/v1/email-poll/logs");
-      if(r.ok)setLogs(await r.json());
-    }catch(e){setErr("Could not load poll logs")}
-  };
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(()=>{load();},[]);
-
-  const trigger=async()=>{
+  async function trigger() {
     setTriggering(true);
-    try{
-      await fetch(API+"/api/v1/email-poll/trigger",{method:"POST"});
+    try {
+      await fetch(API + "/api/v1/email-poll/trigger", { method: "POST" });
       await load();
-    }finally{setTriggering(false);}
+    } finally { setTriggering(false); }
+  }
+
+  const statusColor: Record<string, string> = {
+    SUCCESS: "#16a34a", PARTIAL: "#d97706", FAILED: "#dc2626", NO_MESSAGES: "#6b7280",
   };
 
-  return <div className="page">
-    <div className="header">
-      <div className="brand">Email Invoice Automation</div>
-      <Link href="/" style={{color:"#6b7280",fontSize:14}}>← Back to invoices</Link>
-    </div>
-
-    <div className="card" style={{marginBottom:24}}>
-      <div style={{fontWeight:700,marginBottom:8}}>IMAP configuration</div>
-      <div className="muted" style={{fontSize:13,marginBottom:12}}>
-        Configure via environment variables: <code>INVOICE_EMAIL_ENABLED=true</code>, <code>INVOICE_EMAIL_HOST</code>, <code>INVOICE_EMAIL_USER</code>, <code>INVOICE_EMAIL_PASSWORD</code>, <code>INVOICE_EMAIL_FOLDER</code> (default: INBOX). The poller runs every 5 minutes and extracts PDF/image attachments as invoices.
+  return (
+    <div className="page-content">
+      <div className="page-header">
+        <div className="page-title">Email Invoice Automation</div>
+        <div className="page-subtitle">Automatically extract invoices from your mailbox attachments</div>
       </div>
-      <button className="btn" onClick={trigger} disabled={triggering}>
-        {triggering?"Polling…":"Trigger manual poll"}
-      </button>
+
+      {err && <div className="page-notice page-notice-error">{err}</div>}
+
+      {/* Config card */}
+      <div className="card">
+        <div className="card-title">IMAP Configuration</div>
+        <div className="card-sub">Set these environment variables to enable automatic email polling every 5 minutes</div>
+        <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px 16px", fontFamily: "monospace", fontSize: 12, color: "#374151", marginBottom: 16, lineHeight: 2 }}>
+          INVOICE_EMAIL_ENABLED=true<br />
+          INVOICE_EMAIL_HOST=imap.gmail.com<br />
+          INVOICE_EMAIL_USER=your@email.com<br />
+          INVOICE_EMAIL_PASSWORD=app-password<br />
+          INVOICE_EMAIL_FOLDER=INBOX
+        </div>
+        <button className="btn btn-primary" onClick={trigger} disabled={triggering}>
+          {triggering ? "Polling…" : "Trigger manual poll"}
+        </button>
+      </div>
+
+      {/* Poll logs */}
+      <div className="table-section">
+        <div className="table-toolbar">
+          <span className="table-toolbar-title">
+            Recent Poll Logs <span style={{ color: "#9ca3af", fontWeight: 400, fontSize: 13 }}>({logs.length})</span>
+          </span>
+        </div>
+        {logs.length === 0 ? (
+          <div className="empty-state">No poll logs yet. Configure email polling and trigger a run.</div>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Mailbox</th>
+                <th>Found</th>
+                <th>Created</th>
+                <th>Errors</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map(l => (
+                <tr key={l.id}>
+                  <td style={{ whiteSpace: "nowrap", color: "#6b7280" }}>{new Date(l.polledAt).toLocaleString()}</td>
+                  <td>{l.mailboxUser ?? "—"}</td>
+                  <td>{l.messagesFound}</td>
+                  <td>{l.invoicesCreated}</td>
+                  <td style={{ color: l.errors > 0 ? "#dc2626" : undefined }}>{l.errors}</td>
+                  <td>
+                    <span className="chip" style={{
+                      background: statusColor[l.status] ? statusColor[l.status] + "20" : "#f3f4f6",
+                      color: statusColor[l.status] ?? "#6b7280",
+                    }}>{l.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
-
-    {err&&<div className="error">{err}</div>}
-
-    <div style={{fontWeight:700,marginBottom:12}}>Recent poll logs</div>
-    {logs.length===0?<div className="muted">No poll logs yet. Enable email polling and trigger a run.</div>
-    :<table className="table">
-      <thead><tr>
-        <th>Time</th><th>Mailbox</th><th>Found</th><th>Created</th><th>Errors</th><th>Status</th>
-      </tr></thead>
-      <tbody>{logs.map(l=><tr key={l.id}>
-        <td>{new Date(l.polledAt).toLocaleString()}</td>
-        <td>{l.mailboxUser??"-"}</td>
-        <td>{l.messagesFound}</td>
-        <td>{l.invoicesCreated}</td>
-        <td>{l.errors}</td>
-        <td><span className={`email-status-${l.status.toLowerCase()}`}>{l.status}</span>
-          {l.errorDetail&&<div className="muted" style={{fontSize:11,marginTop:2}}>{l.errorDetail}</div>}
-        </td>
-      </tr>)}</tbody>
-    </table>}
-  </div>;
+  );
 }

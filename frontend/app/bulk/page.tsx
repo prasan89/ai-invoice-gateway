@@ -1,5 +1,6 @@
-'use client';
-import { useState, useRef } from 'react';
+"use client";
+import { useRef, useState } from "react";
+import { API } from "../utils";
 
 interface BulkProgress {
   id: string;
@@ -11,104 +12,128 @@ interface BulkProgress {
   createdAt: string;
 }
 
-export default function BulkPage() {
-  const [files, setFiles] = useState<File[]>([]);
-  const [job, setJob] = useState<BulkProgress | null>(null);
-  const [polling, setPolling] = useState(false);
-  const [error, setError] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+const STATUS_COLOR: Record<string, string> = {
+  COMPLETED: "#16a34a", COMPLETED_WITH_ERRORS: "#d97706", FAILED: "#dc2626", PROCESSING: "#1d4ed8",
+};
 
-  const handleFiles = (incoming: FileList | null) => {
+export default function BulkPage() {
+  const [files, setFiles]   = useState<File[]>([]);
+  const [job, setJob]       = useState<BulkProgress | null>(null);
+  const [polling, setPolling] = useState(false);
+  const [error, setError]   = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  function handleFiles(incoming: FileList | null) {
     if (!incoming) return;
     setFiles(Array.from(incoming));
-  };
+  }
 
-  const startJob = async () => {
+  async function startJob() {
     if (files.length === 0) return;
-    setError('');
+    setError("");
     const form = new FormData();
-    files.forEach(f => form.append('files', f));
+    files.forEach(f => form.append("files", f));
     try {
-      const res = await fetch('/api/v1/invoices/bulk', { method: 'POST', body: form });
+      const res = await fetch(API + "/api/v1/invoices/bulk", { method: "POST", body: form });
       if (!res.ok) throw new Error(await res.text());
       const data: BulkProgress = await res.json();
       setJob(data);
       setPolling(true);
       pollRef.current = setInterval(async () => {
-        const r = await fetch(`/api/v1/bulk-jobs/${data.id}/progress`);
+        const r = await fetch(API + "/api/v1/bulk-jobs/" + data.id + "/progress");
         const d: BulkProgress = await r.json();
         setJob(d);
-        if (d.status === 'COMPLETED' || d.status === 'COMPLETED_WITH_ERRORS') {
+        if (d.status === "COMPLETED" || d.status === "COMPLETED_WITH_ERRORS" || d.status === "FAILED") {
           clearInterval(pollRef.current!);
           setPolling(false);
         }
       }, 2000);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Upload failed');
+      setError(e instanceof Error ? e.message : "Upload failed");
     }
-  };
-
-  const statusColor = (s: string) =>
-    s === 'COMPLETED' ? '#16a34a' : s === 'COMPLETED_WITH_ERRORS' ? '#d97706' : s === 'FAILED' ? '#dc2626' : '#6366f1';
+  }
 
   return (
-    <main style={{ maxWidth: 700, margin: '40px auto', padding: '0 16px', fontFamily: 'system-ui, sans-serif' }}>
-      <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Bulk Invoice Upload</h1>
-      <p style={{ color: '#6b7280', marginBottom: 24 }}>Upload up to 100 PDFs at once. Processing happens in the background.</p>
+    <div className="page-content">
+      <div className="page-header">
+        <div className="page-title">Bulk Invoice Upload</div>
+        <div className="page-subtitle">Upload up to 100 PDFs at once — processing happens in the background</div>
+      </div>
 
-      <div
-        onClick={() => inputRef.current?.click()}
-        onDragOver={e => e.preventDefault()}
-        onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
-        style={{
-          border: '2px dashed #d1d5db', borderRadius: 12, padding: '40px 24px',
-          textAlign: 'center', cursor: 'pointer', marginBottom: 16,
-          background: files.length > 0 ? '#f0fdf4' : '#fafafa',
-        }}
-      >
-        <input ref={inputRef} type="file" multiple accept=".pdf" style={{ display: 'none' }}
-          onChange={e => handleFiles(e.target.files)} />
-        {files.length === 0 ? (
-          <span style={{ color: '#9ca3af' }}>Drag PDFs here or click to select</span>
-        ) : (
-          <span style={{ color: '#16a34a', fontWeight: 600 }}>{files.length} file{files.length !== 1 ? 's' : ''} selected</span>
+      {error && <div className="page-notice page-notice-error">{error}</div>}
+
+      {/* Drop zone */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div
+          onClick={() => inputRef.current?.click()}
+          onDragOver={e => e.preventDefault()}
+          onDrop={e => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
+          style={{
+            border: `2px dashed ${files.length > 0 ? "#86efac" : "#d1d5db"}`,
+            borderRadius: 10,
+            padding: "48px 24px",
+            textAlign: "center",
+            cursor: "pointer",
+            background: files.length > 0 ? "#f0fdf4" : "#fafafa",
+            transition: "border-color 0.15s, background 0.15s",
+            marginBottom: 16,
+          }}
+        >
+          <input ref={inputRef} type="file" multiple accept=".pdf" style={{ display: "none" }}
+            onChange={e => handleFiles(e.target.files)} />
+          <div style={{ fontSize: 32, marginBottom: 8 }}>📄</div>
+          {files.length === 0 ? (
+            <>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>Drag PDFs here or click to select</div>
+              <div style={{ fontSize: 12, color: "#9ca3af" }}>Up to 100 PDF files</div>
+            </>
+          ) : (
+            <div style={{ color: "#16a34a", fontWeight: 700, fontSize: 16 }}>
+              {files.length} file{files.length !== 1 ? "s" : ""} selected
+            </div>
+          )}
+        </div>
+
+        {files.length > 0 && !job && (
+          <button className="btn btn-primary" onClick={startJob}>
+            Process {files.length} invoice{files.length !== 1 ? "s" : ""}
+          </button>
         )}
       </div>
 
-      {files.length > 0 && !job && (
-        <button onClick={startJob} style={{
-          background: '#6366f1', color: '#fff', border: 'none', borderRadius: 8,
-          padding: '10px 28px', fontSize: 15, cursor: 'pointer', fontWeight: 600,
-        }}>
-          Process {files.length} Invoice{files.length !== 1 ? 's' : ''}
-        </button>
-      )}
-
-      {error && <p style={{ color: '#dc2626', marginTop: 12 }}>{error}</p>}
-
+      {/* Job progress */}
       {job && (
-        <div style={{ marginTop: 32, border: '1px solid #e5e7eb', borderRadius: 12, padding: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontWeight: 600 }}>Job {job.id.slice(0, 8)}…</span>
-            <span style={{ color: statusColor(job.status), fontWeight: 700 }}>{job.status}</span>
+        <div className="card">
+          <div className="row-between" style={{ marginBottom: 14 }}>
+            <div>
+              <div className="card-title">Job {job.id.slice(0, 8)}…</div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>{new Date(job.createdAt).toLocaleString()}</div>
+            </div>
+            <span style={{ fontWeight: 700, color: STATUS_COLOR[job.status] ?? "#374151" }}>
+              {job.status.replace(/_/g, " ")}
+            </span>
           </div>
-          <div style={{ background: '#e5e7eb', borderRadius: 999, height: 12, marginBottom: 16 }}>
+
+          {/* Progress bar */}
+          <div style={{ background: "#e5e7eb", borderRadius: 999, height: 10, marginBottom: 16, overflow: "hidden" }}>
             <div style={{
-              background: job.status === 'COMPLETED' ? '#16a34a' : '#6366f1',
-              width: `${job.progressPct}%`, height: '100%', borderRadius: 999,
-              transition: 'width 0.4s ease',
+              background: job.status === "COMPLETED" ? "#16a34a" : "#1d4ed8",
+              width: job.progressPct + "%", height: "100%", borderRadius: 999,
+              transition: "width 0.4s ease",
             }} />
           </div>
-          <div style={{ display: 'flex', gap: 24, fontSize: 14, color: '#374151' }}>
-            <span>Total: <strong>{job.totalCount}</strong></span>
-            <span>Processed: <strong>{job.processedCount}</strong></span>
-            <span>Failed: <strong style={{ color: job.failedCount > 0 ? '#dc2626' : undefined }}>{job.failedCount}</strong></span>
-            <span>Progress: <strong>{job.progressPct}%</strong></span>
+
+          <div className="form-grid form-grid-4">
+            <div className="stat-card"><div className="stat-label">Total</div><div className="stat-value sm">{job.totalCount}</div></div>
+            <div className="stat-card ok"><div className="stat-label">Processed</div><div className="stat-value sm">{job.processedCount}</div></div>
+            <div className="stat-card err"><div className="stat-label">Failed</div><div className="stat-value sm">{job.failedCount}</div></div>
+            <div className="stat-card"><div className="stat-label">Progress</div><div className="stat-value sm">{job.progressPct}%</div></div>
           </div>
-          {polling && <p style={{ fontSize: 13, color: '#6b7280', marginTop: 12 }}>Polling every 2s…</p>}
+
+          {polling && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 12 }}>Polling every 2s…</div>}
         </div>
       )}
-    </main>
+    </div>
   );
 }

@@ -616,3 +616,95 @@ button, input, select, textarea { font: inherit; }
   box-shadow: 0 0 0 3px rgba(29,78,216,0.08);
 }
 .copilot-input:disabled { opacity: 0.6; }
+
+/* ── Shared page layout ── */
+.page-content { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
+
+.page-notice {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+.page-notice-info  { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.page-notice-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+
+/* Shared card */
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.card-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.card-sub   { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
+
+/* Shared form elements */
+.form-grid   { display: grid; gap: 14px; }
+.form-grid-2 { grid-template-columns: 1fr 1fr; }
+.form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.form-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.field-label { display: block; font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 5px; }
+.field-input, .field-select, .field-textarea {
+  display: block; width: 100%;
+  padding: 8px 11px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  font-size: 13px;
+  background: #f9fafb;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field-input:focus, .field-select:focus, .field-textarea:focus {
+  border-color: #93c5fd; background: #fff;
+  box-shadow: 0 0 0 3px rgba(29,78,216,0.08);
+}
+.field-textarea { resize: vertical; font-family: monospace; font-size: 12px; }
+.field-hint { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+
+/* Inline tabs */
+.tab-bar { display: flex; gap: 4px; border-bottom: 2px solid #e5e7eb; margin-bottom: 20px; }
+.tab-btn {
+  padding: 8px 16px; border: none; background: none;
+  font-size: 13px; font-weight: 500; color: #6b7280; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn:hover { color: #111827; }
+.tab-btn.active { color: #1d4ed8; border-bottom-color: #1d4ed8; font-weight: 700; }
+
+/* Badges reused across pages */
+.risk-low      { background: #f3f4f6; color: #374151; }
+.risk-medium   { background: #fef3c7; color: #92400e; }
+.risk-high     { background: #ffedd5; color: #c2410c; }
+.risk-critical { background: #fee2e2; color: #b91c1c; }
+
+.status-connected    { background: #d1fae5; color: #065f46; }
+.status-configured   { background: #dbeafe; color: #1e40af; }
+.status-disconnected { background: #f3f4f6; color: #6b7280; }
+.status-failed       { background: #fee2e2; color: #b91c1c; }
+
+.sub-trialing  { background: #dbeafe; color: #1e40af; }
+.sub-active    { background: #d1fae5; color: #065f46; }
+.sub-past_due  { background: #fef3c7; color: #92400e; }
+.sub-cancelled { background: #fee2e2; color: #b91c1c; }
+.sub-expired   { background: #f3f4f6; color: #6b7280; }
+
+/* Tag chip */
+.chip {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+}
+
+/* Empty state */
+.empty-state { text-align: center; padding: 60px 24px; color: #9ca3af; font-size: 14px; }
+
+/* Loading state */
+.loading-state { padding: 40px 24px; color: #6b7280; font-size: 14px; }
+
+/* Inline row between two elements */
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.row-gap     { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
