@@ -1,6 +1,7 @@
 "use client";
 
 import {useCallback, useEffect, useRef, useState} from "react";
+import Link from "next/link";
 import type {Invoice,HistoryEvent,DashboardStats,Line} from "./types";
 import {API,money} from "./utils";
 import InvoiceTable from "./InvoiceTable";
@@ -150,7 +151,7 @@ export default function Home(){
     <header className="header">
       <div><div className="brand">AI Invoice Gateway</div><div className="muted">AI-powered Indian GST invoice processing</div></div>
       <div style={{display:"flex",gap:12,alignItems:"center"}}>
-        <a href="/email" style={{color:"#6b7280",fontSize:13}}>Email Automation</a>
+        <Link href="/email" style={{color:"#6b7280",fontSize:13}}>Email Automation</Link>
         <span className="badge">Phase 7</span>
       </div>
     </header>

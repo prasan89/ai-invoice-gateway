@@ -1,6 +1,7 @@
 "use client";
 
 import {useEffect,useState} from "react";
+import Link from "next/link";
 import type {EmailPollLog} from "../types";
 import {API} from "../utils";
 
@@ -29,7 +30,7 @@ export default function EmailPage(){
   return <div className="page">
     <div className="header">
       <div className="brand">Email Invoice Automation</div>
-      <a href="/" style={{color:"#6b7280",fontSize:14}}>← Back to invoices</a>
+      <Link href="/" style={{color:"#6b7280",fontSize:14}}>← Back to invoices</Link>
     </div>
 
     <div className="card" style={{marginBottom:24}}>
