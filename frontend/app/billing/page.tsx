@@ -91,7 +91,7 @@ export default function BillingPage() {
           <div style={{ marginBottom: 12 }}>
             <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.4px", marginBottom: 8 }}>Features</div>
             <div className="row-gap">
-              {sub.features.map(f => (
+              {(sub.features ?? []).map(f => (
                 <span key={f} className="chip" style={{ background: "#d1fae5", color: "#065f46" }}>
                   {f.replace(/_/g, " ")}
                 </span>
